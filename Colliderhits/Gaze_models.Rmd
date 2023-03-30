@@ -1,0 +1,174 @@
+---
+title: "General mixed linear models"
+author: "Tracy Sánchez"
+date: "Última actualización: `r format(Sys.Date(), format = '%d %B %Y')`" 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    toc_depth: 6
+    mathjax: null
+    css: doc.css # To set style to maximum in a separate file
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA) # To delete all hashtags from output in HTML 
+library(readr);library(dlookr);library(dplyr);
+library(lme4);library(car);library(emmeans);library(MASS);library(jtools);
+library(lmerTest);library(gmodels);library(nlme); library(multcompView);
+library(ggplot2)
+#emm_options(lmerTest.limit = 10000)
+#emm_options(pbkrtest.limit = 10000)
+
+```
+
+# Loading Data 
+
+```{r echo = FALSE,warning = FALSE }
+
+HumanA <- read.csv("/Volumes/SSD/00_Data_Processing/Pre_processed/Gaze_data_long.csv", sep =",")
+head(HumanA)
+```
+
+```{r }
+
+HumanA$ContextEffectf <-dplyr::recode(HumanA$Context, 
+                                      False = -0.5, True= 0.5,
+                                      .default = NaN)
+HumanA$AgentPresence <-dplyr::recode(HumanA$AvatarPresenceCategory,
+                                             Omitted = -0.5, Present= 0.5,
+                                             .default = NaN)
+HumanA$ContextEffectf <-factor(HumanA$ContextEffectf,levels= c(-0.5, 0.5), 
+                               labels=c('Residential', 'Public')) 
+HumanA$AgentPresencef <-factor(HumanA$AgentPresence,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Omitted', 'Displayed'))
+
+names(HumanA)[names(HumanA) == "median"] <- "Gaze_Median_Length"
+names(HumanA)[names(HumanA) == "count"] <- "Gaze_Count"
+
+```
+```{r}
+colnames(HumanA)
+MainVariables <- subset(HumanA, select = c(AbsolutError, RT, Gaze_Median_Length, Gaze_Count))
+summary(MainVariables)
+```
+
+```{r }
+library(dplyr)
+TwoFactorTable <- HumanA %>% 
+  group_by(ContextEffectf, AgentPresencef)%>%
+  summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
+            n=n(),
+            AccuracyStandardDev = sd(AbsolutError, na.rm = TRUE),
+            RTMean = mean(RT, na.rm = TRUE),
+            RTStandardDev = sd(RT, na.rm = TRUE),
+            Gaze_CountMean = mean(Gaze_Count, na.rm = TRUE),
+            Gaze_CountSD = sd(Gaze_Count, na.rm = TRUE)
+            )
+library(tidyr)
+TwoFactorTableUnite <- TwoFactorTable %>%
+  unite("TwoFactor", ContextEffectf:AgentPresencef, sep= " ", remove = F)
+  
+TwoFactorTableUnite <-  TwoFactorTableUnite %>%
+  mutate( AccuracyStandardError=AccuracyStandardDev/sqrt(n)) %>%  
+  mutate( AccuracyStandardIC=AccuracyStandardDev * qt((1-0.05)/2 + .5, n-1)) %>%
+  mutate( RTStandardError=RTStandardDev/sqrt(n)) %>%
+  mutate( Gaze_CountStandardError=Gaze_CountSD/sqrt(n))
+
+```
+
+ 
+
+```{r echo=FALSE}
+ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
+       aes(x     = ContextEffectf,
+           y     = AccuracyMean,
+           group = AgentPresencef)) +
+
+    geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
+
+    geom_errorbar(aes(linetype=AgentPresencef,
+                      ymin= AccuracyMean-AccuracyStandardError, 
+                      ymax=AccuracyMean+AccuracyStandardError),
+                      position=position_dodge(0.3),
+                      width =  0.2,
+                      size  =  0.7) +
+
+    theme_bw() +
+    theme(axis.title   = element_text(face = "bold"),
+          axis.text    = element_text(face = "bold"),
+          plot.caption = element_text(hjust = 0)) +
+
+    ylab("Absolute angular error in degrees") +
+    xlab("Location") +
+    ggtitle ("Accuracy performance",
+
+             subtitle = "The effect of location  and presence") +
+
+                 labs(caption  = paste0( 
+                                   "Error bars indicate one Standard Error \n"),
+                            hjust=0.5) 
+# Response Time 
+
+ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
+       aes(x     = ContextEffectf,
+           y     = RTMean,
+           group = AgentPresencef)) +
+
+    geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
+
+    geom_errorbar(aes(linetype=AgentPresencef,
+                      ymin= RTMean-RTStandardError, 
+                      ymax=RTMean+RTStandardError),
+                      position=position_dodge(0.3),
+                      width =  0.2,
+                      size  =  0.7) +
+
+    theme_bw() +
+    theme(axis.title   = element_text(face = "bold"),
+          axis.text    = element_text(face = "bold"),
+          plot.caption = element_text(hjust = 0)) +
+
+    ylab("Response Time in Seconds") +
+    xlab("Location") +
+    ggtitle ("Response Time",
+
+             subtitle = "The effect of location  and presence") +
+
+                 labs(caption  = paste0( 
+                                   "Error bars indicate one Standard Error \n"),
+                            hjust=0.5) 
+# Response Time 
+
+ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
+       aes(x     = ContextEffectf,
+           y     = Gaze_CountMean,
+           group = AgentPresencef)) +
+
+    geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
+
+    geom_errorbar(aes(linetype=AgentPresencef,
+                      ymin= Gaze_CountMean-Gaze_CountStandardError, 
+                      ymax=Gaze_CountMean+Gaze_CountStandardError),
+                      position=position_dodge(0.3),
+                      width =  0.2,
+                      size  =  0.7) +
+
+    theme_bw() +
+    theme(axis.title   = element_text(face = "bold"),
+          axis.text    = element_text(face = "bold"),
+          plot.caption = element_text(hjust = 0)) +
+
+    ylab("Response Time in Seconds") +
+    xlab("Location") +
+    ggtitle ("Response Time",
+
+             subtitle = "The effect of location  and presence") +
+
+                 labs(caption  = paste0( 
+                                   "Error bars indicate one Standard Error \n"),
+                            hjust=0.5) 
+```
