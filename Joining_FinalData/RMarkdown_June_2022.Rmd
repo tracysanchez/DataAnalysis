@@ -26,40 +26,49 @@ library(ggplot2)
 # Loading Data 
 
 ```{r echo = FALSE,warning = FALSE }
-
 HumanA <- read.csv("/Users/tracysanchezpacheco/Documents/Resources/humanA_Behavioural.csv", sep =",")
-head(HumanA)
 ```
 
+
+```{r echo = FALSE,warning = FALSE }
+unique(HumanA$ID)
+```
+
+
+
+```{r echo = FALSE,warning = FALSE }
+HumanAf <- HumanA %>% dplyr::filter(!ID %in% c(0479, 2361, 3246, 3572, 3976, 5238, 5531, 5895, 7264))
+```
 
 # Recoding for effects and formating factors 
 ```{r }
 
-HumanA$ContextEffectf <-dplyr::recode(HumanA$Context, 
+HumanAf$ContextEffectf <-dplyr::recode(HumanAf$Context, 
                                       False = -0.5, True= 0.5,
                                       .default = NaN)
-HumanA$AgentPresence <-dplyr::recode(HumanA$AvatarPresenceCategory,
+HumanAf$AgentPresence <-dplyr::recode(HumanAf$AvatarPresenceCategory,
                                              Omitted = -0.5, Present= 0.5,
                                              .default = NaN)
-HumanA$ContextEffectf <-factor(HumanA$ContextEffectf,levels= c(-0.5, 0.5), 
+HumanAf$ContextEffectf <-factor(HumanAf$ContextEffectf,levels= c(-0.5, 0.5), 
                                labels=c('Residential', 'Public')) 
-HumanA$AgentPresencef <-factor(HumanA$AgentPresence,
+HumanAf$AgentPresencef <-factor(HumanAf$AgentPresence,
                                 levels= c(-0.5, 0.5), 
-                                labels=c('Omitted', 'Displayed')) 
+                                labels=c('Omitted', 'Displayed'))
+
 ```
 # Data descriptives
 ```{r}
-MainVariables <- subset(HumanA, select = c(AbsolutError, RT))
+MainVariables <- subset(HumanAf, select = c(AbsolutError, RT))
 summary(MainVariables)
 ```
 ```{r}
-summary(HumanA$AgentPresence)
+summary(HumanAf$AgentPresence)
 
 ```
 
 
 ```{r}
-df = HumanA[complete.cases(HumanA),]
+df = HumanAf[complete.cases(HumanAf),]
 ggplot(df, aes(x=ContextEffectf,  y=AbsolutError, fill=AgentPresencef)) + 
   geom_boxplot(notch=TRUE,
         notchwidth = 0.8,
@@ -76,7 +85,7 @@ ggplot(df, aes(x=ContextEffectf,  y=RT, fill=AgentPresencef)) +
 
 ```{r }
 library(dplyr)
-TwoFactorTable <- HumanA %>% 
+TwoFactorTable <- HumanAf %>% 
   group_by(ContextEffectf, AgentPresencef)%>%
   summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
             n=n(),
@@ -156,6 +165,9 @@ ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
                                    "Error bars indicate one Standard Error \n"),
                             hjust=0.5) 
 ```
+```{r}
+n_distinct(TwoFactorTableUnite$ID)
+```
 
 
 
@@ -163,10 +175,15 @@ ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
 
 ## Checking for the distribution of Absolut error
 ```{r warning = FALSE }
-df = HumanA[complete.cases(HumanA),]
+df = HumanAf[complete.cases(HumanAf),]
 df$AbsolutErrorR <- round(df$AbsolutError, digits = 3)
 qqp(df$AbsolutErrorR, "norm")
-qqp(df$AbsolutErrorR, "lnorm")
+```
+
+
+```{r warning = FALSE }
+n_distinct(df$ID)
+
 ```
 
 
@@ -257,7 +274,7 @@ plot(TwofactorInteraction, which = 1)
 plot(MeaningfulContext, which = 1)
 ```
 ```{r}
-GHQ <- glmer(AbsolutError ~  ContextEffectf*AgentPresencef + (1|ID), data = HumanA,family=gaussian(link = "log"), nAGQ = 25)  
+GHQ <- glmer(AbsolutError ~  ContextEffectf*AgentPresencef + (1|ID), data = HumanAf,family=gaussian(link = "log"), nAGQ = 25)  
 summary(GHQ)
 Anova(GHQ)
 anova(GHQ)
@@ -290,7 +307,7 @@ anova(interceptOnly, IDrandomInterceptOnly, StartlocationsrandomIntercept,
 plot(TwofactorInteraction, which = 1)
 ```
 ```{r}
-model <- glmmPQL(RT ~  ContextEffectf*AgentPresencef, ~1|ID/PointingTaskStartingLocations,  family = gaussian(link = "log"), data = HumanA, verbose = FALSE)
+model <- glmmPQL(RT ~  ContextEffectf*AgentPresencef, ~1|ID/PointingTaskStartingLocations,  family = gaussian(link = "log"), data = HumanAf, verbose = FALSE)
 summary(model)
 ```
 
@@ -299,20 +316,21 @@ summary(model)
 
 ## Response Time models 
 ## Checking for the distribution of RT
+
 ```{r warning = FALSE }
-df = HumanA[complete.cases(HumanA),]
+df = HumanAf[complete.cases(HumanAf),]
 df$RTr <- round(df$RT, digits = 3)
 qqp(df$RT, "norm")
 qqp(df$RT, "lnorm")
 ```
 
 ```{r}
-interceptOnlyt <-gls(log(RT) ~ 1, data = df, 
+interceptOnlyt <-gls(log(RTr) ~ 1, data = df, 
                     method = "ML")
-IDrandomInterceptOnlyt <-lme(log(RT) ~ 1, data = df,  
+IDrandomInterceptOnlyt <-lme(log(RTr) ~ 1, data = df,  
                             random =~1|ID,
                             method = "ML")
-StartlocationsrandomInterceptt <-lme(log(RT) ~ 1, data = df,   
+StartlocationsrandomInterceptt <-lme(log(RTr) ~ 1, data = df,   
                               random=~1|ID|PointingTaskStartingLocations,
                               method= "ML")
 MeaningfulContext <-update(StartlocationsrandomInterceptt, .~. + ContextEffectf)
@@ -369,20 +387,12 @@ ggplot(CLD,
 
 
 ```{r}
-GHQ <- glmer(RT ~  ContextEffectf*AgentPresencef + (1|ID), data = HumanA,
-    family=gaussian(link = "log"), nAGQ = 25)  
-summary(GHQ)
-Anova(GHQ)
-anova(GHQ)
-emmeans(GHQ, pairwise ~ ContextEffectf:AgentPresencef )
-```
-```{r}
-HumanA$Agent_Category <- with(HumanA, ave(seq_along(ID), ID, FUN = function(x) sample(c(rep('Action', ceiling(length(x)*0.6)), rep('Standing', length(x) - ceiling(length(x)*0.6))))))
+HumanAf$Agent_Category <- with(HumanAf, ave(seq_along(ID), ID, FUN = function(x) sample(c(rep('Action', ceiling(length(x)*0.6)), rep('Standing', length(x) - ceiling(length(x)*0.6))))))
 ```
 
 ```{r }
 library(dplyr)
-TwoFactorTable <- HumanA %>% 
+TwoFactorTable <- HumanAf %>% 
   group_by(ContextEffectf, AgentPresencef, Agent_Category)%>%
   summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
             n=n(),
