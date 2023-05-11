@@ -21,78 +21,93 @@ library(lmerTest);library(gmodels);library(nlme); library(multcompView);
 library(ggplot2)
 #emm_options(lmerTest.limit = 10000)
 #emm_options(pbkrtest.limit = 10000)
-
 ```
 
 # Loading Data 
 
 ```{r echo = FALSE,warning = FALSE }
 
-HumanA <- read.csv("/Volumes/SSD/00_Data_Processing/Pre_processed/Gaze_data_long.csv", sep =",")
-head(HumanA)
-```
-
-```{r }
-
-HumanA$ContextEffectf <-dplyr::recode(HumanA$Context, 
-                                      False = -0.5, True= 0.5,
-                                      .default = NaN)
-HumanA$AgentPresence <-dplyr::recode(HumanA$AvatarPresenceCategory,
-                                             Omitted = -0.5, Present= 0.5,
-                                             .default = NaN)
-HumanA$ContextEffectf <-factor(HumanA$ContextEffectf,levels= c(-0.5, 0.5), 
-                               labels=c('Residential', 'Public')) 
-HumanA$AgentPresencef <-factor(HumanA$AgentPresence,
-                                levels= c(-0.5, 0.5), 
-                                labels=c('Omitted', 'Displayed'))
-
-names(HumanA)[names(HumanA) == "median"] <- "Gaze_Median_Length"
-names(HumanA)[names(HumanA) == "count"] <- "Gaze_Count"
-
+Grouped_gazes <- read.csv("/Volumes/SSD/00_Data_Processing/Pre_processed/summary_name_stats_fix_length_NS_Agent.csv", sep =",")
+Long_Gazes <- read.csv("/Volumes/SSD/00_Data_Processing/Pre_processed/data_frame_gaze_no_out_ONLY_TEST.csv")
+head(Grouped_gazes)
 ```
 ```{r}
-colnames(HumanA)
-MainVariables <- subset(HumanA, select = c(AbsolutError, RT, Gaze_Median_Length, Gaze_Count))
-summary(MainVariables)
+Long_Gazes_agents <- Long_Gazes[ which(Long_Gazes$ Hit_Object_Category=='Agent'), ]
+Grouped_gazes_agents <- Grouped_gazes[ which(Grouped_gazes$Hit_Object_Category=='Agent'),]
 ```
 
-```{r }
+
+```{r}
 library(dplyr)
-TwoFactorTable <- HumanA %>% 
-  group_by(ContextEffectf, AgentPresencef)%>%
-  summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
+Gaze_Cat_Sess <- Grouped_gazes %>% 
+  group_by(Collider_CategoricalN, Session)%>%
+  summarise(Gaze_Cat = mean(count, na.rm = TRUE),
             n=n(),
-            AccuracyStandardDev = sd(AbsolutError, na.rm = TRUE),
-            RTMean = mean(RT, na.rm = TRUE),
-            RTStandardDev = sd(RT, na.rm = TRUE),
-            Gaze_CountMean = mean(Gaze_Count, na.rm = TRUE),
-            Gaze_CountSD = sd(Gaze_Count, na.rm = TRUE)
+            Gaze_CatStandardDev = sd(count, na.rm = TRUE),
+            Gaze_Len = mean(mean, na.rm = TRUE),
+            Gaze_LenStandardDev = sd(mean, na.rm = TRUE),
             )
 library(tidyr)
-TwoFactorTableUnite <- TwoFactorTable %>%
-  unite("TwoFactor", ContextEffectf:AgentPresencef, sep= " ", remove = F)
+Gaze_Cat_SessUnite <- Gaze_Cat_Sess %>%
+  unite("Grouped_gazes", Collider_CategoricalN:Session, sep= " ", remove = F)
   
-TwoFactorTableUnite <-  TwoFactorTableUnite %>%
-  mutate( AccuracyStandardError=AccuracyStandardDev/sqrt(n)) %>%  
-  mutate( AccuracyStandardIC=AccuracyStandardDev * qt((1-0.05)/2 + .5, n-1)) %>%
-  mutate( RTStandardError=RTStandardDev/sqrt(n)) %>%
-  mutate( Gaze_CountStandardError=Gaze_CountSD/sqrt(n))
+Gaze_Cat_SessUnitee <-  Gaze_Cat_SessUnite %>%
+  mutate(  Gaze_CatStandardError=Gaze_CatStandardDev/sqrt(n)) %>%  
+  mutate( Gaze_CatStandardIC=Gaze_CatStandardDev * qt((1-0.05)/2 + .5, n-1)) %>%
+  mutate( Gaze_LenError=Gaze_LenStandardDev/sqrt(n)) %>%
+  mutate( Gaze_LenStandardError=Gaze_Len/sqrt(n))
+
+c
 
 ```
 
+ aes(x     = ContextEffectf,
+           y     = RTMean,
+           group = AgentPresencef))
+           geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
+```{r}
+Gaze_Cat_SessUnitee$Session <- factor(Gaze_Cat_SessUnitee$Session)
+ggplot(data=subset(Gaze_Cat_SessUnitee, !is.na(Gaze_Cat)),
+       aes(x     = Collider_CategoricalN,
+           y     = Gaze_Cat,
+           group = Session)) +
+
+    geom_point(aes(shape=Session, linetype =Session), position=position_dodge(0.3)) +
+
+    geom_errorbar(aes(linetype=Session,
+                      ymin= Gaze_Cat-Gaze_CatStandardError, 
+                      ymax=Gaze_Cat+Gaze_CatStandardError),
+                      position=position_dodge(0.3),
+                      width =  0.2,
+                      size  =  0.7) +
+
+    theme_bw() +
+    theme(axis.title   = element_text(face = "bold"),
+          axis.text    = element_text(face = "bold"),
+          plot.caption = element_text(hjust = 0),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+
+    ylab("Gaze count") +
+    xlab("Location") +
+    ggtitle ("Average gaze events per category") +
+
+                 labs(caption  = paste0( 
+                                   "Error bars indicate one Standard Error \n"),
+                            hjust=0.5) 
+```
  
 
 ```{r echo=FALSE}
-ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
-       aes(x     = ContextEffectf,
-           y     = AccuracyMean,
-           group = AgentPresencef)) +
+ggplot(data=Gaze_Cat_SessUnitee,
+       aes(x     = Collider_CategoricalN,
+           y     = Gaze_Cat,
+           group = Session)) +
 
-    geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
+    geom_point(aes(shape=Session, linetype =Session), position=position_dodge(0.3)) +
 
-    geom_errorbar(aes(linetype=AgentPresencef,
-                      ymin= AccuracyMean-AccuracyStandardError, 
-                      ymax=AccuracyMean+AccuracyStandardError),
+    geom_errorbar(aes(linetype=Session,
+                      ymin= Gaze_Cat-Gaze_CatStandardError, 
+                      ymax=Gaze_Cat+Gaze_CatStandardError),
                       position=position_dodge(0.3),
                       width =  0.2,
                       size  =  0.7) +
@@ -111,18 +126,116 @@ ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
                  labs(caption  = paste0( 
                                    "Error bars indicate one Standard Error \n"),
                             hjust=0.5) 
-# Response Time 
 
-ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
+```
+
+
+```{r}
+n_distinct(TwoFactorTableUnite$ID)
+```
+
+
+
+
+
+## Checking for the distribution of Absolut error
+```{r warning = FALSE }
+df = HumanAf[complete.cases(HumanAf),]
+df$AbsolutErrorR <- round(df$AbsolutError, digits = 3)
+qqp(df$AbsolutErrorR, "norm")
+```
+
+
+```{r warning = FALSE }
+n_distinct(df$ID)
+
+```
+
+
+# Linear mixed models
+
+## Assessing the need for a multilevel model
+
+```{r}
+interceptOnly <-gls(count ~ 1, data = Grouped_gazes, 
+                    method = "ML")
+IDrandomInterceptOnly <-lme(count ~ 1, data = Grouped_gazes,  
+                            random =~1|SubjectID,
+                            method = "ML")
+Sessions <-update(IDrandomInterceptOnly, .~. + Session)
+Active_Session <-update(Sessions, .~. + Agent_Category)
+TwofactorInteraction <-update(Active_Session, .~. + Session*Agent_Category)
+summary(TwofactorInteraction)
+Anova(TwofactorInteraction)
+```
+```{r}
+interceptOnlym <-gls(median ~ 1, data = Grouped_gazes, 
+                    method = "ML")
+IDrandomInterceptOnlym <-lme(median ~ 1, data = Grouped_gazes,  
+                            random =~1|SubjectID,
+                            method = "ML")
+Sessions <-update(IDrandomInterceptOnlym, .~. + Session)
+Active_Session <-update(Sessions, .~. + Agent_Category)
+TwofactorInteraction <-update(Active_Session, .~. + Session*Agent_Category)
+summary(TwofactorInteraction)
+Anova(TwofactorInteraction)
+```
+```{r}
+interceptOnlym <-gls(max ~ 1, data = Grouped_gazes, 
+                    method = "ML")
+IDrandomInterceptOnlymax <-lme(max ~ 1, data = Grouped_gazes,  
+                            random =~1|SubjectID,
+                            method = "ML")
+Sessions <-update(IDrandomInterceptOnlymax, .~. + Session)
+Active_Session <-update(Sessions, .~. + Agent_Category)
+TwofactorInteraction <-update(Active_Session, .~. + Session*Agent_Category)
+summary(TwofactorInteraction)
+anova(TwofactorInteraction)
+
+library(effectsize)
+options(es.use_symbols = TRUE) # get nice symbols when printing! (On Windows, requires R >= 4.2.0)
+eta_squared(TwofactorInteraction)
+```
+
+## Absolut Error Models
+
+I am adding one main factor at a time 
+```{r}
+MeaningfulContext <-update(StartlocationsrandomIntercept, .~. + ContextEffectf)
+summary(MeaningfulContext)
+Anova(MeaningfulContext)
+```
+```{r}
+Presence <-update(MeaningfulContext, .~. + AgentPresencef)
+summary(Presence)
+Anova(Presence)
+```
+
+```{r}
+TwofactorInteraction <-update(Presence, .~. + ContextEffectf*AgentPresencef)
+summary(TwofactorInteraction)
+Anova(TwofactorInteraction)
+Pairwise<- emmeans(TwofactorInteraction, pairwise ~ ContextEffectf*AgentPresencef)
+Pairwise
+plot(Pairwise[[2]], CIs = TRUE)
+```
+```{r}
+library(multcomp);library(multcompView)
+CLD <- cld(Pairwise,
+          alpha=0.05,
+          Letters=letters,
+          adjust="sidak")
+ggplot(CLD,
        aes(x     = ContextEffectf,
-           y     = RTMean,
-           group = AgentPresencef)) +
+           y     = emmean,
+           group = AgentPresencef,
+           colours = .group)) +
 
     geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
 
     geom_errorbar(aes(linetype=AgentPresencef,
-                      ymin= RTMean-RTStandardError, 
-                      ymax=RTMean+RTStandardError),
+                      ymin  =  lower.CL,
+                      ymax  =  upper.CL),
                       position=position_dodge(0.3),
                       width =  0.2,
                       size  =  0.7) +
@@ -132,43 +245,16 @@ ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
           axis.text    = element_text(face = "bold"),
           plot.caption = element_text(hjust = 0)) +
 
-    ylab("Response Time in Seconds") +
-    xlab("Location") +
-    ggtitle ("Response Time",
+    ylab("Estimated marginal mean\ Absolute angular error") +
+    xlab("Location location") +
+    ggtitle ("Marginal Means",
 
-             subtitle = "The effect of location  and presence") +
-
-                 labs(caption  = paste0( 
-                                   "Error bars indicate one Standard Error \n"),
-                            hjust=0.5) 
-# Response Time 
-
-ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
-       aes(x     = ContextEffectf,
-           y     = Gaze_CountMean,
-           group = AgentPresencef)) +
-
-    geom_point(aes(shape=AgentPresencef, linetype =AgentPresencef), position=position_dodge(0.3)) +
-
-    geom_errorbar(aes(linetype=AgentPresencef,
-                      ymin= Gaze_CountMean-Gaze_CountStandardError, 
-                      ymax=Gaze_CountMean+Gaze_CountStandardError),
-                      position=position_dodge(0.3),
-                      width =  0.2,
-                      size  =  0.7) +
-
-    theme_bw() +
-    theme(axis.title   = element_text(face = "bold"),
-          axis.text    = element_text(face = "bold"),
-          plot.caption = element_text(hjust = 0)) +
-
-    ylab("Response Time in Seconds") +
-    xlab("Location") +
-    ggtitle ("Response Time",
-
-             subtitle = "The effect of location  and presence") +
+             subtitle = "location * Presence") +
 
                  labs(caption  = paste0( 
-                                   "Error bars indicate one Standard Error \n"),
+                                   "Boxes indicate the EM mean. \n",
+                                   "Error bars indicate the 95% ",
+                                   "confidence interval of the EM mean. \n"),
                             hjust=0.5) 
+```
 ```
