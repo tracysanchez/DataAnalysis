@@ -527,6 +527,116 @@ ggplot(data=subset(TwoFactorTableUnite, !is.na(AgentPresencef)),
                             hjust=0.5) 
 ```
 
+# Loading Data 
+
+```{r echo = FALSE, warning = FALSE}
+HumanA_Fixations <- read.csv("/Volumes/TwoTeras/2_DataSets_Experiments_1_2/BehavioralData_Fixations_Wide.csv", sep =",")
+head(HumanA_Fixations)
+```
+```{r}
+HumanA_Fixations$ContextEffectf <-dplyr::recode(HumanA_Fixations$Context, 
+                                      False = -0.5, True= 0.5,
+                                      .default = NaN)
+HumanA_Fixations$AgentPresence <-dplyr::recode(HumanA_Fixations$AvatarPresenceCategory,
+                                             Omitted = -0.5, Present= 0.5,
+                                             .default = NaN)
+HumanA_Fixations$Agent_Action_level <-dplyr::recode(HumanA_Fixations$Agent_Action_level,
+                                             Passive = -0.5, Active= 0.5,
+                                             .default = NaN)
+HumanA_Fixations$ContextEffectf <-factor(HumanA_Fixations$ContextEffectf,levels= c(-0.5, 0.5), 
+                               labels=c('Residential', 'Public')) 
+HumanA_Fixations$AgentPresencef <-factor(HumanA_Fixations$AgentPresence,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Omitted', 'Displayed'))
+HumanA_Fixations$Agent_Action_levelf <-factor(HumanA_Fixations$Agent_Action_level,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Passive', 'Active'))
+```
+
+```{r}
+library(dplyr)
+TwoFactorTable <- HumanA_Fixations %>% 
+  group_by(ContextEffectf, Agent_Action_levelf)%>%
+  summarise(Dwelling_Time_Building_GazeMean = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+            n=n(),
+            Dwelling_Time_Building_GazeDev = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+            Dwelling_Time_Agent_GazeMean = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+            Dwelling_Time_Agent_GazeDev = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE))
+library(tidyr)
+TwoFactorTableUnite <- TwoFactorTable %>%
+  unite("TwoFactor", ContextEffectf:Agent_Action_levelf, sep= " ", remove = F)
+  
+TwoFactorTableUnite <-  TwoFactorTableUnite %>%
+  mutate( Dwelling_Time_Agent_Gaze_StandardError = Dwelling_Time_Agent_GazeDev/sqrt(n)) %>%  
+  mutate( Dwelling_Time_Agent_GazeIC = Dwelling_Time_Agent_GazeDev * qt((1-0.05)/2 + .5, n-1)) %>%
+  mutate( Dwelling_Time_Building_Gaze_StandardError = Dwelling_Time_Building_GazeDev/sqrt(n)) 
+```
+
+```{r}
+Acc <- ggplot(data = subset(TwoFactorTableUnite, !is.na(Agent_Action_levelf)),
+              aes(x = ContextEffectf,
+                  y = Dwelling_Time_Building_GazeMean,
+                  group = Agent_Action_levelf))
+
+Acc + geom_point(aes(shape = Agent_Action_levelf, linetype = Agent_Action_levelf), position = position_dodge(0.3)) +
+  geom_errorbar(aes(linetype = Agent_Action_levelf, ymin = Dwelling_Time_Building_GazeMean - Dwelling_Time_Building_Gaze_StandardError, 
+                    ymax = Dwelling_Time_Building_GazeMean + Dwelling_Time_Building_Gaze_StandardError),
+                position = position_dodge(0.3),
+                width = 0.2,
+                size = 0.7) +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"),
+        legend.position="top",
+        legend.background = element_rect(fill="gray88",
+                                  size=0.5, linetype="solid", 
+                                  colour ="gray88"),
+        plot.caption = element_text(hjust = 0))  +
+  ylab("Dwelling Time of target buildings in Seconds") +
+  xlab("Location") +
+  ggtitle("Dwelling Time of target buildings",
+          subtitle = "The effects of location and agent category on Dwelling Time Building") +
+  labs(caption = paste0("Error bars indicate one Standard Error \n"))
+```
+
+```{r warning = FALSE }
+df_Agent = HumanA_Fixations[complete.cases(HumanA_Fixations),]
+df_Agent$AbsolutErrorR <- round(df_Agent$AbsolutError, digits = 3)
+qqp(df_Agent$AbsolutErrorR, "norm")
+qqp(df_Agent$AbsolutErrorR, "lnorm")
+
+# Set up contrast to sum zero A.K.A compare each level equally
+contrasts(df_Agent$ContextEffectf) <- "contr.sum"
+contrasts(df_Agent$AgentPresencef) <- "contr.sum"
+contrasts(df_Agent$Agent_Action_levelf) <- "contr.sum"
+```
+
+
+```{r}
+interceptOnly_Agent<-gls(AbsolutErrorR ~ 1, data = df_Agent, 
+                    method = "ML")
+IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
+TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+```
+
+```{r}
+TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze)
+summary(TwofactorInteraction_Agent)
+Anova(TwofactorInteraction_Agent)
+```
+```{r}
+plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+```
+```{r}
+Complete_model <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
+summary(Complete_model)
+Anova(Complete_model)
+```
+```{r}
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+```
+
+
 
 
 
