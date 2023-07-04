@@ -19,6 +19,8 @@ library(readr);library(dlookr);library(dplyr);
 library(lme4);library(car);library(emmeans);library(MASS);library(jtools);
 library(lmerTest);library(gmodels);library(nlme); library(multcompView);
 library(ggplot2)
+library(sjPlot)
+library(sjstats)
 emm_options(lmerTest.limit = 10000)
 emm_options(pbkrtest.limit = 10000)
 ```
@@ -620,7 +622,7 @@ TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|Su
 ```
 
 ```{r}
-TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze)
+TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
 summary(TwofactorInteraction_Agent)
 Anova(TwofactorInteraction_Agent)
 ```
@@ -628,12 +630,13 @@ Anova(TwofactorInteraction_Agent)
 plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
 ```
 ```{r}
-Complete_model <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
+Complete_model <-update(TrialIDrandomIntercept_Agent, .~.  + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
 summary(Complete_model)
 Anova(Complete_model)
 ```
 ```{r}
 plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(Complete_model)
 ```
 
 

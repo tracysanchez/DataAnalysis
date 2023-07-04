@@ -19,6 +19,8 @@ library(readr);library(dlookr);library(dplyr);
 library(lme4);library(car);library(emmeans);library(MASS);library(jtools);
 library(lmerTest);library(gmodels);library(nlme); library(multcompView);
 library(ggplot2)
+library(sjPlot)
+library(sjstats)
 emm_options(lmerTest.limit = 10000)
 emm_options(pbkrtest.limit = 10000)
 ```
@@ -87,6 +89,20 @@ TwoFactorTableUnite <-  TwoFactorTableUnite %>%
   mutate( AccuracyStandardIC=AccuracyStandardDev * qt((1-0.05)/2 + .5, n-1)) %>%
   mutate( RTStandardError=RTStandardDev/sqrt(n)) 
 
+OneFactorTable <- HumanA %>% 
+  group_by(ContextEffectf)%>%
+  summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
+            n=n(),
+            AccuracyStandardDev = sd(AbsolutError, na.rm = TRUE),
+            RTMean = mean(RT, na.rm = TRUE),
+            RTStandardDev = sd(RT, na.rm = TRUE))
+library(tidyr)
+  
+OneFactorTable <-  OneFactorTable %>%
+  mutate( AccuracyStandardError=AccuracyStandardDev/sqrt(n)) %>%  
+  mutate( AccuracyStandardIC=AccuracyStandardDev * qt((1-0.05)/2 + .5, n-1)) %>%
+  mutate( RTStandardError=RTStandardDev/sqrt(n)) 
+
 ```
 
  
@@ -119,6 +135,27 @@ Acc_two + geom_point(aes(shape = AgentPresencef, linetype = AgentPresencef), pos
   labs(caption = paste0("Error bars indicate one Standard Error \n"),
        linetype = legend_title,
        shape = legend_title)
+
+legend_title <- "Agent Presence on the Stimuli"
+Acc_One <- ggplot(data = subset(OneFactorTable, !is.na(ContextEffectf)),
+              aes(x = ContextEffectf,
+                  y = AccuracyMean))
+
+Acc_One + geom_point(aes(shape = ContextEffectf, linetype = ContextEffectf), position = position_dodge(0.3)) +
+  geom_errorbar(aes(linetype = ContextEffectf, ymin = AccuracyMean - AccuracyStandardError, 
+                    ymax = AccuracyMean + AccuracyStandardError),
+                position = position_dodge(0.3),
+                width = 0.2,
+                size = 0.7) +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"))  +
+  ylab("Average absolute angular error in degrees") +
+  xlab("Location") +
+  ggtitle("Accuracy performance",
+          subtitle = "The effects of location and agent category") +
+  labs(caption = paste0("Error bars indicate one Standard Error \n"))
+       
 ```
 
 ```{r echo=FALSE}
@@ -198,9 +235,7 @@ Anova(TwofactorInteraction)
 #plot(Pairwise[[2]], CIs = TRUE)
 tab_model(TwofactorInteraction, pred.labels=c("Intercept", "Location context (Public vs. Residential)", "Agent presence in task stimuli", "Location x Agent Presence"))
 ```
-```{r}
-SpanishLabel <- unz(tmp, "141.txt", encoding = "UTF-8")
-```
+
 
 ```{r}
 library(glmmTMB)
@@ -571,41 +606,70 @@ Acc + geom_point(aes(shape = Agent_Action_levelf, linetype = Agent_Action_levelf
 ```
 
 ```{r warning = FALSE }
-df_Agent = HumanA_FixationsOne[complete.cases(HumanA_FixationsOne),]
-df_Agent$AbsolutErrorR <- round(df_Agent$AbsolutError, digits = 3)
-qqp(df_Agent$AbsolutErrorR, "norm")
-qqp(df_Agent$AbsolutErrorR, "lnorm")
+df_Fix_One = HumanA_FixationsOne[complete.cases(HumanA_FixationsOne),]
+df_Fix_One$AbsolutErrorR <- round(df_Fix_One$AbsolutError, digits = 3)
+qqp(df_Fix_One$AbsolutErrorR, "norm")
+qqp(df_Fix_One$AbsolutErrorR, "lnorm")
 
 # Set up contrast to sum zero A.K.A compare each level equally
-contrasts(df_Agent$ContextEffectf) <- "contr.sum"
-contrasts(df_Agent$AgentPresencef) <- "contr.sum"
-contrasts(df_Agent$Agent_Action_levelf) <- "contr.sum"
+contrasts(df_Fix_One$ContextEffectf) <- "contr.sum"
+contrasts(df_Fix_One$AgentPresencef) <- "contr.sum"
+contrasts(df_Fix_One$Agent_Action_levelf) <- "contr.sum"
 ```
 
 
 ```{r}
-interceptOnly_Agent<-gls(AbsolutErrorR ~ 1, data = df_Agent, 
+interceptOnly_Agent<-gls(AbsolutErrorR ~ 1, data = df_Fix_One, 
                     method = "ML")
-IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
-TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Fix_One)
+TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Fix_One)
 ```
 
 ```{r}
-TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze)
+TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze+ Dwelling_Time_Agent_Gaze)
 summary(TwofactorInteraction_Agent)
 Anova(TwofactorInteraction_Agent)
 ```
+
+```{r}
+tab_model(TwofactorInteraction_Agent)
+```
+
+```{r}
+b <- ggplot(df_Fix_One, aes(x = AbsolutErrorR, y = Dwelling_Time_Building_Gaze))
+# Scatter plot with regression line
+b + geom_point()+
+  geom_smooth(method = "lm") 
+     
+# Add a loess smoothed fit curve
+b + geom_point()+
+  geom_smooth(method = "loess") 
+```
+```{r}
+plot_model(TwofactorInteraction_Agent, type="re")
+plot_model(TwofactorInteraction_Agent, type="est")
+plot_model(TwofactorInteraction_Agent, type="pred")
+plot_model(TwofactorInteraction_Agent, type="int", mdrt.values = "quart")
+```
+
+
 ```{r}
 plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
 ```
 ```{r}
-Complete_model <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
+Complete_model <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
 summary(Complete_model)
 Anova(Complete_model)
 ```
 ```{r}
 plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
-tab_model(Complete_model)
+tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location context (Public vs. Residential)", "Agent Presence in Task Stimuli"))
+```
+```{r}
+plot_model(Complete_model, type="re")
+plot_model(Complete_model, type="est")
+plot_model(Complete_model, type="pred")
+plot_model(Complete_model, type="int", mdrt.values = "quart")
 ```
 
 

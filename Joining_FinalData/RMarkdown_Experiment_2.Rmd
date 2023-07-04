@@ -19,6 +19,8 @@ library(readr);library(dlookr);library(dplyr);
 library(lme4);library(car);library(emmeans);library(MASS);library(jtools);
 library(lmerTest);library(gmodels);library(nlme); library(multcompView);
 library(ggplot2)
+library(sjPlot)
+library(sjstats)
 emm_options(lmerTest.limit = 10000)
 emm_options(pbkrtest.limit = 10000)
 ```
@@ -783,7 +785,7 @@ Acc + geom_point(aes(shape = Agent_Action_levelf, linetype = Agent_Action_levelf
 
 ```{r warning = FALSE }
 df_Agent = HumanA_Fixations[complete.cases(HumanA_Fixations),]
-df_Agent$AbsolutErrorR <- round(HumanA_Fixations$AbsolutError, digits = 3)
+df_Agent$AbsolutErrorR <- round(df_Agent$AbsolutError, digits = 3)
 qqp(df_Agent$AbsolutErrorR, "norm")
 qqp(df_Agent$AbsolutErrorR, "lnorm")
 
@@ -802,11 +804,27 @@ TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|Su
 ```
 
 ```{r}
-TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze*Dwelling_Time_Agent_Gaze)
+TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
 summary(TwofactorInteraction_Agent)
 Anova(TwofactorInteraction_Agent)
 ```
 ```{r}
 plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(TwofactorInteraction_Agent)
+```
+```{r}
+Complete_model <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
+summary(Complete_model)
+Anova(Complete_model)
+```
+```{r}
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location context (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Location x Agent category" ))
+```
+```{r}
+plot_model(Complete_model, type="re")
+plot_model(Complete_model, type="est")
+plot_model(Complete_model, type="pred")
+plot_model(Complete_model, type="int", mdrt.values = "quart")
 ```
 
