@@ -55,8 +55,8 @@ HumanA$AgentPresencef <-factor(HumanA$AgentPresence,
 ```
 # Data descriptives
 ```{r}
-MainVariables <- subset(HumanA, select = c(AbsolutError, RT))
-summary(MainVariables)
+MainVariables <- subset(HumanA, select = c(AbsolutError, RT, Alter))
+describe(MainVariables)
 ```
 ```{r}
 summary(HumanA$AgentPresence)

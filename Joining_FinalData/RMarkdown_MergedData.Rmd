@@ -553,7 +553,26 @@ HumanA_Fixations$AgentPresencef <-factor(HumanA_Fixations$AgentPresence,
 HumanA_Fixations$Agent_Action_levelf <-factor(HumanA_Fixations$Agent_Action_level,
                                 levels= c(-0.5, 0.5), 
                                 labels=c('Passive', 'Active'))
+HumanA_Fixations$Match <- ifelse(HumanA_Fixations$Experiment == 1 & HumanA_Fixations$ContextEffectf == 'Public', 0.5, -0.5)
+HumanA_Fixations$Matchf <-factor(HumanA_Fixations$Match,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Not Congruent', 'Congruent'))
 ```
+
+```{r}
+Congruence_check <- HumanA_Fixations %>% 
+  group_by(ContextEffectf, Agent_Action_levelf, Matchf)%>%
+  summarise(Dwelling_Time_Building_GazeMean = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+            #Dwelling_Time_Building_GazeSD = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+            Performance_Mean = mean(AbsolutError, na.rm = TRUE),
+            #Performance_SD = sd(AbsolutError, na.rm = TRUE),
+            n=n())
+Congruence_check_ordered <- Congruence_check[order(Congruence_check$Performance_Mean, decreasing = TRUE),]
+```
+```{r}
+HumanA_Fixations
+```
+
 
 ```{r}
 library(dplyr)
@@ -611,33 +630,68 @@ qqp(df_Agent$AbsolutErrorR, "lnorm")
 contrasts(df_Agent$ContextEffectf) <- "contr.sum"
 contrasts(df_Agent$AgentPresencef) <- "contr.sum"
 contrasts(df_Agent$Agent_Action_levelf) <- "contr.sum"
+contrasts(df_Agent$Matchf) <- "contr.sum"
 ```
 
 
 ```{r}
-interceptOnly_Agent<-gls(AbsolutErrorR ~ 1, data = df_Agent, 
-                    method = "ML")
-IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
-TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+interceptOnly<-gls(AbsolutErrorR ~ 1, data = df_Agent, method="ML")
+IDrandomIntercept <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
+PointingLocations <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+anova( IDrandomIntercept, PointingLocations)
 ```
 
 ```{r}
-TwofactorInteraction_Agent <-update(TrialIDrandomIntercept_Agent, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
+TwofactorInteraction_Agent <-update(PointingLocations, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
 summary(TwofactorInteraction_Agent)
 Anova(TwofactorInteraction_Agent)
 ```
 ```{r}
 plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(TwofactorInteraction_Agent)
 ```
 ```{r}
-Complete_model <-update(TrialIDrandomIntercept_Agent, .~.  + ContextEffectf*Agent_Action_levelf  + AgentPresencef )
+linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf, data=df_Agent)
+Complete_model <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf)
+Complete_model_NOMATCH <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf + AgentPresencef )
 summary(Complete_model)
 Anova(Complete_model)
 ```
 ```{r}
-plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
-tab_model(Complete_model)
+a <- anova(Complete_model, linear_model)
+library(stargazer)
+class(a) <- "lmerMod"
+stargazer(a, type = "latex")
+
+anovadf <- data.frame(anova(Complete_model, linear_model))
+xtable(anovadf)
 ```
+
+```{r}
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Congruent Pair", "Location x Agent category" ))
+
+```
+```{r}
+tab_model(Complete_model_NOMATCH, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli",  "Location x Agent category" ))
+```
+
+
+```{r}
+library(glmmTMB)
+plot_model(Complete_model, type="re")
+plot_model(Complete_model, type="est", legend_title = "Custom Legend Title")
+plot_model(Complete_model, type="pred")
+plot_model(Complete_model, type="int", mdrt.values = "quart")
+```
+```{r}
+require("lattice")
+
+Complete_model_log <-lmer(log(AbsolutErrorR) ~ 1 + (1|StartPointID) + (1|SubjectID)  + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf, data = df_Agent,  REML = FALSE)
+qqmath(Complete_model_log)
+```
+
+
 
 
 

@@ -528,18 +528,18 @@ theme(axis.title = element_text(face = "bold"),
        shape = legend_title)
 ```
 ```{r}
-HumanA_Agent <- read.csv("/Volumes/TwoTeras/2_DataSets_Experiments_1_2/humanA_Behavioural_Agent.csv", sep =",")
-unique(HumanA_Agent$ID)
+HumanA_Agent <- read.csv("/Volumes/TwoTeras/1_Experiment_2/Eye_Tracking/Pre_processed/Data_Sets/AgentData_Fixations_Wide.csv", sep =",")
+unique(HumanA_Agent$SubjectID)
 ```
 ```{r}
-HumanA_Agent <- HumanA_Agent %>% dplyr::filter(!ID %in% c(4580, 3540))
-HumanA_Agent$ContextEffectf <-dplyr::recode(HumanA_Agent$BuildingCategory_Agent, 
+HumanA_Agent <- HumanA_Agent %>% dplyr::filter(!SubjectID %in% c(4580, 3540))
+HumanA_Agent$ContextEffectf <-dplyr::recode(HumanA_Agent$BuildingCategory, 
                                       Residential = -0.5, Public= 0.5,
                                       .default = NaN)
-HumanA_Agent$AgentPresence <-dplyr::recode(HumanA_Agent$AvatarPresenceCategory_Agent,
+HumanA_Agent$AgentPresence <-dplyr::recode(HumanA_Agent$AvatarPresenceCategory,
                                              Omitted = -0.5, Present= 0.5,
                                              .default = NaN)
-HumanA_Agent$Agent_Action_level <-dplyr::recode(HumanA_Agent$AgentCategory_Agent,
+HumanA_Agent$Agent_Action_level <-dplyr::recode(HumanA_Agent$AgentCategory,
                                              Passive = -0.5, Active= 0.5,
                                              .default = NaN)
 HumanA_Agent$ContextEffectf <-factor(HumanA_Agent$ContextEffectf,levels= c(-0.5, 0.5), 
@@ -553,7 +553,7 @@ HumanA_Agent$Agent_Action_levelf <-factor(HumanA_Agent$Agent_Action_level,
 ```
 # Data descriptives
 ```{r}
-MainVariables_Agent <- subset(HumanA_Agent, select = c(AbsolutError_Agent, RT_Agent))
+MainVariables_Agent <- subset(HumanA_Agent, select = c(AbsolutError, RT))
 summary(MainVariables_Agent)
 ```
 
@@ -565,11 +565,22 @@ summary(HumanA_Agent$AgentPresencef)
 ```{r}
 df_Agent = HumanA_Agent[complete.cases(HumanA_Agent),]
 
-ggplot(df_Agent,aes(x=AbsolutError_Agent,group=Agent_Action_levelf,fill=Agent_Action_levelf))+
+ggplot(df_Agent,aes(x=AbsolutError,group=Agent_Action_levelf,fill=Agent_Action_levelf))+
   geom_histogram(position="identity",alpha=0.5,binwidth=10)+  facet_grid(cols = vars(ContextEffectf))+theme_bw()
 ```
+```{r}
+TwoFactorTable_Agent <- HumanA_Agent %>% 
+  group_by(ContextEffectf, Agent_Action_levelf)%>%
+  summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
+            n=n(),
+            AccuracyStandardDev = sd(AbsolutError, na.rm = TRUE),
+            RTMean = mean(RT, na.rm = TRUE),
+            RTStandardDev = sd(RT, na.rm = TRUE))
+TwoFactorTable_Agent
+```
+
 ```{r }
-library(dplyr)
+
 TwoFactorTable_Agent <- HumanA_Agent %>% 
   group_by(ContextEffectf, Agent_Action_levelf)%>%
   summarise(AccuracyMean = mean(AbsolutError_Agent, na.rm = TRUE),
