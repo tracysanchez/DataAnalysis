@@ -1,0 +1,285 @@
+---
+title: "Eye-Tracking_combinedModels"
+author: "Tracy Sánchez"
+date: "Última actualización: `r format(Sys.Date(), format = '%d %B %Y')`" 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    toc_depth: 6
+    mathjax: null
+    css: doc.css # To set style to maximum in a separate file
+---
+```{r setup, include=FALSE}
+# Set global chunk options for R Markdown output
+knitr::opts_chunk$set(comment = NA)  # Removes all hashtags from output in HTML 
+
+# Load required packages
+library_packages <- c(
+  "readr", "dlookr", "dplyr", "lme4", "car", "emmeans", "MASS", "jtools", 
+  "lmerTest", "gmodels", "nlme", "multcompView", "ggplot2", "sjPlot", "sjstats"
+)
+lapply(library_packages, library, character.only = TRUE)
+
+# Set options for emmeans
+emm_options(lmerTest.limit = 15000)
+emm_options(pbkrtest.limit = 15000)
+```
+
+```{r echo = FALSE, warning = FALSE}
+HumanA_Fixations <- read.csv("/Volumes/TwoTeras/2_DataSets_Experiments_1_2/BehavioralData_Fixations_Wide.csv", sep =",")
+head(HumanA_Fixations)
+```
+
+
+
+```{r}
+library(dplyr)
+
+HumanA_Fixations <- HumanA_Fixations %>%
+  # Recoding variables
+  mutate(
+    ContextEffect = case_when(
+      Context == "False" ~ -0.5,
+      Context == "True" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    AgentPresence = case_when(
+      AvatarPresenceCategory == "Omitted" ~ -0.5,
+      AvatarPresenceCategory == "Present" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    Agent_Action_level = case_when(
+      Agent_Category == "Passive" ~ -0.5,
+      Agent_Category == "Active" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    Match = ifelse(Experiment == 1 & ContextEffect == 0.5, 0.5,-0.5)
+  ) %>%
+  # Convert numeric variables to factors
+  mutate(
+    ContextEffectf = factor(ContextEffect, levels = c(-0.5, 0.5), labels = c('Residential', 'Public')),
+    AgentPresencef = factor(AgentPresence, levels = c(-0.5, 0.5), labels = c('Omitted', 'Displayed')),
+    Agent_Action_levelf = factor(Agent_Action_level, levels = c(-0.5, 0.5), labels = c('Passive', 'Active')),
+    Matchf = factor(Match, levels = c(-0.5, 0.5), labels = c('Not Congruent', 'Congruent'))
+  )
+
+
+```
+
+```{r}
+
+
+df <- HumanA_Fixations %>% 
+  filter(complete.cases(.))
+
+p <- ggplot(df, aes(x = AbsolutError, fill = Agent_Action_levelf)) +
+  
+  geom_histogram(aes(group = Agent_Action_levelf), 
+                 position = "identity", 
+                 alpha = 0.5, 
+                 binwidth = 10) +
+  
+  facet_grid(cols = vars(ContextEffectf)) +
+  
+  theme_bw()
+
+# Print the plot
+p
+
+```
+
+
+```{r}
+Congruence_check <- HumanA_Fixations %>%
+  group_by(ContextEffectf, Agent_Action_levelf, Matchf) %>%
+  summarise(
+    Dwelling_Time_Building_GazeMean = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    Performance_Mean = mean(AbsolutError, na.rm = TRUE),
+    n = n(),
+    .groups = "drop" # This will drop the grouping, useful if you don't want to keep it after summarising
+  )
+
+Congruence_check_ordered <- Congruence_check %>%
+  arrange(desc(Performance_Mean))
+```
+
+```{r}
+# Set up sum-to-zero contrasts for selected factors
+factors_to_contrast <- c("ContextEffectf", "AgentPresencef", "Agent_Action_levelf")
+
+for (factor_name in factors_to_contrast) {
+  contrasts(HumanA_Fixations[[factor_name]]) <- "contr.sum"
+}
+```
+
+```{r }
+# Subset main variables from dataset
+MainVariables <- dplyr::select(HumanA_Fixations, AbsolutError, RT)
+
+# Display summary
+summary(MainVariables)
+
+```
+
+```{r}
+# Filter out rows with any missing values
+df <- HumanA_Fixations %>% filter(complete.cases(.))
+
+# Plot histogram
+ggplot(df, aes(x = AbsolutError, group = Agent_Action_levelf, fill = Agent_Action_levelf)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 10) +
+  facet_grid(cols = vars(ContextEffectf)) +
+  theme_bw()
+```
+```{r}
+library(dplyr)
+library(tidyr)
+
+# 1. Grouping and calculating summary statistics
+TwoFactorTable <- HumanA_Fixations %>% 
+  group_by(ContextEffectf, Agent_Action_levelf) %>%
+  summarise(
+    Dwelling_Time_Building_GazeMean = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    Dwelling_Time_Building_GazeDev = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    Dwelling_Time_Agent_GazeMean = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    Dwelling_Time_Agent_GazeDev = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    n = n()
+  )
+
+# 2. Combining factor levels into a single column
+TwoFactorTableUnite <- TwoFactorTable %>% 
+  unite("TwoFactor", ContextEffectf:Agent_Action_levelf, sep= " ", remove = FALSE)
+
+# 3. Calculating standard errors and confidence intervals
+TwoFactorTableUnite <- TwoFactorTableUnite %>% 
+  mutate(
+    Dwelling_Time_Agent_Gaze_StandardError = Dwelling_Time_Agent_GazeDev/sqrt(n), 
+    Dwelling_Time_Agent_GazeIC = Dwelling_Time_Agent_GazeDev * qt((1-0.05)/2 + .5, n-1),
+    Dwelling_Time_Building_Gaze_StandardError = Dwelling_Time_Building_GazeDev/sqrt(n)
+  )
+
+```
+```{r}
+dodge_width <- 0.3
+
+Acc <- ggplot(data = subset(TwoFactorTableUnite, !is.na(Agent_Action_levelf)),
+              aes(x = ContextEffectf, y = Dwelling_Time_Building_GazeMean, 
+                  group = Agent_Action_levelf, linetype = Agent_Action_levelf)) +
+  
+  geom_point(aes(shape = Agent_Action_levelf), 
+             position = position_dodge(dodge_width)) +
+  
+  geom_errorbar(aes(ymin = Dwelling_Time_Building_GazeMean - Dwelling_Time_Building_Gaze_StandardError, 
+                    ymax = Dwelling_Time_Building_GazeMean + Dwelling_Time_Building_Gaze_StandardError),
+                position = position_dodge(dodge_width), 
+                width = 0.2, 
+                size = 0.7) +
+  
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"),
+        legend.position="top",
+        legend.background = element_rect(fill="gray88",
+                                  size=0.5, linetype="solid", 
+                                  colour ="gray88"),
+        plot.caption = element_text(hjust = 0))  +
+  
+  labs(title = "Dwelling Time of target buildings",
+       subtitle = "The effects of location and agent category on Dwelling Time Building",
+       caption = "Error bars indicate one Standard Error",
+       y = "Dwelling Time of target buildings in Seconds",
+       x = "Location")
+
+# Print the plot
+Acc
+
+```
+```{r}
+# Prepare the data: filter complete cases and round the AbsolutError variable
+df <- HumanA_Fixations %>% 
+  filter(complete.cases(.)) %>%
+  mutate(AbsolutErrorR = round(AbsolutError, digits = 3))
+
+# Compare AbsolutErrorR to a normal distribution
+qqp(df$AbsolutErrorR, "norm")
+
+# Compare AbsolutErrorR to a log-normal distribution
+qqp(df$AbsolutErrorR, "lnorm")
+```
+## --- Assessing the need for a multilevel model ---
+
+```{r}
+# Model with only intercept
+interceptOnly <- gls(AbsolutError ~ 1, data = df, method = "ML")
+
+# Add ID as random intercept
+IDrandomInterceptOnly <- lmer(AbsolutError ~ 1 + (1|SubjectID), data = df)
+
+# Add both ID and Starting Position as random intercepts
+StartlocationsrandomIntercept <- lmer(AbsolutError ~ 1 + (1|SubjectID) + (1|PointingTaskStartingLocations), data = df)
+anova( IDrandomInterceptOnly, StartlocationsrandomIntercept)
+cat("Including Id and starting position as random effects significantly improves the fit of the model\n")
+```
+## --- Absolute Error Models ---
+
+```{r}
+# Starting with eye-tracking as predictor of performance
+
+TwofactorInteraction_Agent <-update(StartlocationsrandomIntercept, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
+# Model summary
+summary(TwofactorInteraction_Agent)
+# Anova test for the model
+Anova(TwofactorInteraction_Agent)
+```
+
+```{r}
+plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(TwofactorInteraction_Agent)
+```
+```{r}
+
+# Linear regression model with various predictors
+linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf + AgentPresencef + Matchf, data=df)
+
+
+# Complete model with all predictors
+Complete_model <- update(StartlocationsrandomIntercept, 
+                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence + Match)
+
+# Model without the interaction term
+Complete_model_sin <- update(StartlocationsrandomIntercept, 
+                            . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + AgentPresence + Match)
+
+# Model without the 'Matchf' variable
+Complete_model_NOMATCH <- update(StartlocationsrandomIntercept, 
+                                . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence)
+
+# Display summary of the complete model
+summary(Complete_model)
+
+# Anova test for the complete model
+Anova(Complete_model)
+
+# Compare the models with and without the interaction term
+anova(Complete_model, Complete_model_sin)
+
+```
+```{r}
+plot_model(Complete_model, type="re", order.terms = TRUE)
+
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red",  axis.labels =c("Location x Agent category", "Congruent Pair", "Agent Presence in Task Stimuli", "Agent category (Active vs. Passive)", "Location  (Public vs. Residential)","Dwealling time on agent", "Dwealling time on task Building"))
+tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Congruent Pair", "Location x Agent category" ))
+```
+```{r}
+emmeans(Complete_model, pairwise ~ ContextEffect*Match)
+```
+
+
+
+
+
+
+

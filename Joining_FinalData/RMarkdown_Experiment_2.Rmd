@@ -532,7 +532,7 @@ HumanA_Agent <- read.csv("/Volumes/TwoTeras/1_Experiment_2/Eye_Tracking/Pre_proc
 unique(HumanA_Agent$SubjectID)
 ```
 ```{r}
-HumanA_Agent <- HumanA_Agent %>% dplyr::filter(!SubjectID %in% c(4580, 3540))
+#HumanA_Agent <- HumanA_Agent %>% dplyr::filter(!SubjectID %in% c(4580, 3540))
 HumanA_Agent$ContextEffectf <-dplyr::recode(HumanA_Agent$BuildingCategory, 
                                       Residential = -0.5, Public= 0.5,
                                       .default = NaN)
@@ -583,11 +583,11 @@ TwoFactorTable_Agent
 
 TwoFactorTable_Agent <- HumanA_Agent %>% 
   group_by(ContextEffectf, Agent_Action_levelf)%>%
-  summarise(AccuracyMean = mean(AbsolutError_Agent, na.rm = TRUE),
+  summarise(AccuracyMean = mean(AbsolutError, na.rm = TRUE),
             n=n(),
-            AccuracyStandardDev = sd(AbsolutError_Agent, na.rm = TRUE),
-            RTMean = mean(RT_Agent, na.rm = TRUE),
-            RTStandardDev = sd(RT_Agent, na.rm = TRUE))
+            AccuracyStandardDev = sd(AbsolutError, na.rm = TRUE),
+            RTMean = mean(RT, na.rm = TRUE),
+            RTStandardDev = sd(RT, na.rm = TRUE))
 library(tidyr)
 TwoFactorTableUnite_Agent <- TwoFactorTable_Agent %>%
   unite("TwoFactor", ContextEffectf:Agent_Action_levelf, sep= " ", remove = F)
@@ -668,8 +668,8 @@ contrasts(df_Agent$Agent_Action_levelf) <- "contr.sum"
 
 interceptOnly_Agent<-gls(AbsolutErrorR ~ 1, data = df_Agent, 
                     method = "ML")
-IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|ID), data = df_Agent)
-TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID_Agent) + (1|ID), data = df_Agent)
+IDrandomInterceptOnly_Agent <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
+TrialIDrandomIntercept_Agent <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
 ```
 
 ```{r}
@@ -691,6 +691,34 @@ plot_model(TwofactorInteraction_Agent, type="int", mdrt.values = "quart")
 ```{r}
 plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, axis.labels = c("Location * Agent category","Agent category (Active vs Passive)","Location (Public vs. Residential) ", "Agent presence on the task stimuli"), title = "LMM predictor estimates for response time", colors="bw",  vline.color = "red")
 ```
+```{r}
+interceptOnly<-gls(AbsolutErrorR ~ 1, data = df_Agent, method="ML")
+IDrandomIntercept <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Agent)
+PointingLocations <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+anova( IDrandomIntercept, PointingLocations)
+```
+```{r}
+TwofactorInteraction_Agent <-update(PointingLocations, .~. +  Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze)
+summary(TwofactorInteraction_Agent)
+Anova(TwofactorInteraction_Agent)
+```
+```{r}
+plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+tab_model(TwofactorInteraction_Agent)
+```
+```{r}
+linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf, data=df_Agent)
+Complete_model <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf)
+Complete_model_NOMATCH <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf)
+summary(Complete_model)
+Anova(Complete_model)
+```
+```{r}
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red", axis.labels = c("Location x Agent category","Agent category (Active vs. Passive)","Location  (Public vs. Residential)", "Dwealling time on agent", "Dwealling time on task Building","Intercept"))
+tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)", "Location x Agent category" ))
+
+```
+
 ```{r}
 means_just_location_Agent <- lsmeans(TwofactorInteraction_Agent, ~  ContextEffectf) 
 ```

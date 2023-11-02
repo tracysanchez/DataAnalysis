@@ -302,13 +302,14 @@ means_just_active <- lsmeans(TwofactorInteraction_P, ~  Agent_Action_levelf)
 
 ```{r}
 library(glmmTMB)
-plot_model(TwofactorInteraction_P, type="re")
+plot_model(TwofactorInteraction_P, type="re", order.terms = TRUE)
 plot_model(TwofactorInteraction_P, type="est", legend_title = "Custom Legend Title")
 plot_model(TwofactorInteraction_P, type="pred")
 plot_model(TwofactorInteraction_P, type="int", mdrt.values = "quart")
 ```
 ```{r}
 plot_model(TwofactorInteraction_P, show.values = TRUE, value.offset = .3, axis.labels = c("Location * Agent category","Agent category (Active vs Passive)","Location (Public vs. Residential) ", "Agent presence on the task stimuli"), title = "LMM predictor estimates for absolute angular error", colors="bw",  vline.color = "red")
+
 ```
 ```{r}
 # To convert from lsmeans output 
@@ -542,7 +543,7 @@ HumanA_Fixations$ContextEffectf <-dplyr::recode(HumanA_Fixations$Context,
 HumanA_Fixations$AgentPresence <-dplyr::recode(HumanA_Fixations$AvatarPresenceCategory,
                                              Omitted = -0.5, Present= 0.5,
                                              .default = NaN)
-HumanA_Fixations$Agent_Action_level <-dplyr::recode(HumanA_Fixations$Agent_Action_level,
+HumanA_Fixations$Agent_Action_level <-dplyr::recode(HumanA_Fixations$Agent_Category,
                                              Passive = -0.5, Active= 0.5,
                                              .default = NaN)
 HumanA_Fixations$ContextEffectf <-factor(HumanA_Fixations$ContextEffectf,levels= c(-0.5, 0.5), 
@@ -558,6 +559,8 @@ HumanA_Fixations$Matchf <-factor(HumanA_Fixations$Match,
                                 levels= c(-0.5, 0.5), 
                                 labels=c('Not Congruent', 'Congruent'))
 ```
+
+
 
 ```{r}
 Congruence_check <- HumanA_Fixations %>% 
@@ -651,31 +654,76 @@ plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, co
 tab_model(TwofactorInteraction_Agent)
 ```
 ```{r}
+OnefactorInteraction_Agent <- update(PointingLocations,  .~.  + ContextEffectf )
+TwofactorInteraction_Agent <- update(OnefactorInteraction_Agent,  .~. +  Agent_Action_level)
+ThreefactorInteraction_Agent <- update(TwofactorInteraction_Agent,  .~.  + Matchf)
+summary(ThreefactorInteraction_Agent)
+Anova(ThreefactorInteraction_Agent)
+anova(OnefactorInteraction_Agent, TwofactorInteraction_Agent, ThreefactorInteraction_Agent)
+```
+
+
+```{r}
 linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf, data=df_Agent)
 Complete_model <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf)
+Complete_model_sin <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + AgentPresencef + Matchf)
 Complete_model_NOMATCH <-update(PointingLocations, .~. + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf + AgentPresencef )
 summary(Complete_model)
 Anova(Complete_model)
+anova(Complete_model, Complete_model_sin)
 ```
 ```{r}
 a <- anova(Complete_model, linear_model)
 library(stargazer)
 class(a) <- "lmerMod"
 stargazer(a, type = "latex")
+```
 
+
+
+```{r}
+plot_model(Complete_model, type="re", order.terms = TRUE)
+lmne()
+```
+```{r}
+interceptOnly<-gls( Dwelling_Time_Agent_Gaze ~ 1, data = df_AgentP, method="ML")
+IDrandomIntercept <-lmer(Dwelling_Time_Agent_Gaze ~ 1 + (1|SubjectID), data = df_Agent)
+PointingLocations <-lmer( Dwelling_Time_Agent_Gaze ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Agent)
+anova( IDrandomIntercept, PointingLocations)
+```
+```{r}
+Experiments_Dwelling <- update(IDrandomIntercept,  .~. + Experiment + Agent_Action_levelf*ContextEffectf )
+summary(Experiments_Dwelling)
+
+```
+
+```{r}
+Pairwise<- emmeans(Experiments_Dwelling, pairwise ~ Agent_Action_levelf*ContextEffectf)
+Pairwise
+plot(Pairwise[[2]], CIs = TRUE)
+```
+
+
+```{r}
 anovadf <- data.frame(anova(Complete_model, linear_model))
 xtable(anovadf)
 ```
 
 ```{r}
-plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red",  axis.labels =c("Location x Agent category", "Congruent Pair", "Agent Presence in Task Stimuli", "Agent category (Active vs. Passive)", "Location  (Public vs. Residential)","Dwealling time on agent", "Dwealling time on task Building"))
 tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Congruent Pair", "Location x Agent category" ))
-
 ```
+
+
 ```{r}
 tab_model(Complete_model_NOMATCH, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli",  "Location x Agent category" ))
 ```
 
+```{r}
+library(data.table)
+model_df <- data.table(coef(summary(Complete_model)), keep.rownames = 'term')
+write.csv(model_df, "/Volumes/TwoTeras/Resources/Complete_model.csv")
+```
 
 ```{r}
 library(glmmTMB)
@@ -684,16 +732,108 @@ plot_model(Complete_model, type="est", legend_title = "Custom Legend Title")
 plot_model(Complete_model, type="pred")
 plot_model(Complete_model, type="int", mdrt.values = "quart")
 ```
-```{r}
-require("lattice")
 
-Complete_model_log <-lmer(log(AbsolutErrorR) ~ 1 + (1|StartPointID) + (1|SubjectID)  + Dwelling_Time_Building_Gaze+Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf  + AgentPresencef + Matchf, data = df_Agent,  REML = FALSE)
-qqmath(Complete_model_log)
+
+
+# Loading Data 
+
+```{r echo = FALSE, warning = FALSE}
+HumanA_Fixations_agents <- read.csv("/Volumes/TwoTeras/1_Experiment_2/Eye_Tracking/Pre_processed/Data_Sets/AgentData_Fixations_Wide.csv", sep =",")
+head(HumanA_Fixations_agents)
+```
+```{r echo = FALSE,warning = FALSE }
+HumanA_Fixations_agents %>% summarise(count = n_distinct(SubjectID))
+```
+
+```{r}
+HumanA_Fixations_agents$ContextEffectf <-dplyr::recode(HumanA_Fixations_agents$Context, 
+                                      False = -0.5, True= 0.5,
+                                      .default = NaN)
+HumanA_Fixations_agents$AgentPresence <-dplyr::recode(HumanA_Fixations_agents$AvatarPresenceCategory,
+                                             Omitted = -0.5, Present= 0.5,
+                                             .default = NaN)
+HumanA_Fixations_agents$Agent_Action_level <-dplyr::recode(HumanA_Fixations_agents$Agent_Category,
+                                             Passive = -0.5, Active= 0.5,
+                                             .default = NaN)
+HumanA_Fixations_agents$ContextEffectf <-factor(HumanA_Fixations_agents$ContextEffectf,levels= c(-0.5, 0.5), 
+                               labels=c('Residential', 'Public')) 
+HumanA_Fixations_agents$AgentPresencef <-factor(HumanA_Fixations_agents$AgentPresence,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Omitted', 'Displayed'))
+HumanA_Fixations_agents$Agent_Action_levelf <-factor(HumanA_Fixations_agents$Agent_Action_level,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Passive', 'Active'))
+```
+
+```{r warning = FALSE }
+df_AgentP = HumanA_Fixations_agents[complete.cases(HumanA_Fixations_agents),]
+df_AgentP$AbsolutErrorR <- round(df_AgentP$AbsolutError, digits = 3)
+qqp(df_AgentP$AbsolutErrorR, "norm")
+qqp(df_AgentP$AbsolutErrorR, "lnorm")
+
+# Set up contrast to sum zero A.K.A compare each level equally
+contrasts(df_AgentP$ContextEffectf) <- "contr.sum"
+contrasts(df_AgentP$AgentPresencef) <- "contr.sum"
+contrasts(df_AgentP$Agent_Action_levelf) <- "contr.sum"
 ```
 
 
+```{r}
+TwofactorInteraction_Agent <- update(PointingLocations,  .~. + Agent_Action_level*ContextEffectf )
+summary(TwofactorInteraction_Agent)
+```
+```{r}
+Pairwise<- emmeans(TwofactorInteraction_Agent, pairwise ~ Agent_Action_levelf*ContextEffectf)
+Pairwise
+plot(Pairwise[[2]], CIs = TRUE)
+```
+```{r}
+Concat_experiment2 <- read.csv("/Users/tracysanchezpacheco/Desktop/ConcatSecondExperiment.csv", sep =",")
+head(Concat_experiment2)
+```
+```{r}
+Concat_experiment2$ContextEffectf <-dplyr::recode(Concat_experiment2$Context, 
+                                      False = -0.5, True= 0.5,
+                                      .default = NaN)
+Concat_experiment2$AgentPresence <-dplyr::recode(Concat_experiment2$AvatarPresenceCategory,
+                                             Omitted = -0.5, Present= 0.5,
+                                             .default = NaN)
+Concat_experiment2$Agent_Action_level <-dplyr::recode(Concat_experiment2$Agent_Category,
+                                             Passive = -0.5, Active= 0.5,
+                                             .default = NaN)
+Concat_experiment2$ContextEffectf <-factor(Concat_experiment2$ContextEffectf,levels= c(-0.5, 0.5), 
+                               labels=c('Residential', 'Public')) 
+Concat_experiment2$AgentPresencef <-factor(Concat_experiment2$AgentPresence,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Omitted', 'Displayed'))
+Concat_experiment2$Agent_Action_levelf <-factor(Concat_experiment2$Agent_Action_level,
+                                levels= c(-0.5, 0.5), 
+                                labels=c('Passive', 'Active'))
+```
 
+```{r warning = FALSE }
+df_Concat_experiment2= Concat_experiment2[complete.cases(Concat_experiment2),]
+df_Concat_experiment2$AbsolutErrorR <- round(df_Concat_experiment2$AbsolutError, digits = 3)
+qqp(df_Concat_experiment2$AbsolutErrorR, "norm")
+qqp(df_Concat_experiment2$AbsolutErrorR, "lnorm")
 
-
+# Set up contrast to sum zero A.K.A compare each level equally
+contrasts(df_Concat_experiment2$ContextEffectf) <- "contr.sum"
+contrasts(df_Concat_experiment2$AgentPresencef) <- "contr.sum"
+contrasts(df_Concat_experiment2$Agent_Action_levelf) <- "contr.sum"
+```
+```{r}
+interceptOnly<-gls(AbsolutErrorR ~ 1, data = df_Concat_experiment2, method="ML")
+IDrandomIntercept <-lmer(AbsolutErrorR ~ 1 + (1|SubjectID), data = df_Concat_experiment2)
+PointingLocations <-lmer(AbsolutErrorR ~ 1 + (1|StartPointID) + (1|SubjectID), data = df_Concat_experiment2)
+anova( IDrandomIntercept, PointingLocations)
+```
+```{r}
+contrastM <-update(PointingLocations, .~. + Task)
+summary(contrastM)
+```
+```{r}
+emmeans(contrastM, pairwise ~ Task)
+```
 
 

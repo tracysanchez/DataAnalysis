@@ -1,0 +1,168 @@
+---
+title: "Exploration_Gaze"
+author: "Tracy Sánchez"
+date: "Última actualización: `r format(Sys.Date(), format = '%d %B %Y')`" 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    toc_depth: 6
+    mathjax: null
+    css: doc.css # To set style to maximum in a separate file
+---
+
+```{r setup, include=FALSE}
+# Set global chunk options for R Markdown output
+knitr::opts_chunk$set(comment = NA)  # Removes all hashtags from output in HTML 
+
+# Load required packages
+library_packages <- c(
+  "readr", "dlookr", "dplyr", "lme4", "car", "emmeans", "MASS", "jtools", 
+  "lmerTest", "gmodels", "nlme", "multcompView", "ggplot2", "sjPlot", "sjstats"
+)
+lapply(library_packages, library, character.only = TRUE)
+
+# Set options for emmeans
+emm_options(lmerTest.limit = 15000)
+emm_options(pbkrtest.limit = 15000)
+
+# Not scientific notation
+options(scipen=999)
+```
+
+
+```{r echo = FALSE, warning = FALSE}
+HumanA_Fixations <- read.csv("/Volumes/TwoTeras/2_DataSets_Experiments_1_2/BehavioralData_Fixations_Wide.csv", sep =",")
+head(HumanA_Fixations)
+```
+
+```{r}
+library(dplyr)
+
+HumanA_Fixations <- HumanA_Fixations %>%
+  # Recoding variables
+  mutate(
+    ContextEffect = case_when(
+      Context == "False" ~ -0.5,
+      Context == "True" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    AgentPresence = case_when(
+      AvatarPresenceCategory == "Omitted" ~ -0.5,
+      AvatarPresenceCategory == "Present" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    Agent_Action_level = case_when(
+      Agent_Category == "Passive" ~ -0.5,
+      Agent_Category == "Active" ~ 0.5,
+      TRUE ~ NaN
+    ),
+    Experiment_effect = case_when(
+      Experiment == 1 ~ -0.5,
+      Experiment == 2 ~ 0.5,
+      TRUE ~ NaN
+    ),
+    Match = ifelse(Experiment == 1 & ContextEffect == 0.5, 0.5,-0.5)
+  ) %>%
+  # Convert numeric variables to factors
+  mutate(
+    ContextEffectf = factor(ContextEffect, levels = c(-0.5, 0.5), labels = c('Residential', 'Public')),
+    AgentPresencef = factor(AgentPresence, levels = c(-0.5, 0.5), labels = c('Omitted', 'Displayed')),
+    Agent_Action_levelf = factor(Agent_Action_level, levels = c(-0.5, 0.5), labels = c('Passive', 'Active')),
+    Matchf = factor(Match, levels = c(-0.5, 0.5), labels = c('Not Congruent', 'Congruent'))
+  )
+```
+
+```{r}
+
+df <- HumanA_Fixations %>% 
+  filter(complete.cases(.))
+
+p <- ggplot(df, aes(x = AbsolutError, fill = Agent_Action_levelf)) +
+  
+  geom_histogram(aes(group = Agent_Action_levelf), 
+                 position = "identity", 
+                 alpha = 0.5, 
+                 binwidth = 10) +
+  
+  facet_grid(cols = vars(ContextEffectf)) +
+  
+  theme_bw()
+
+# Print the plot
+p
+```
+```{r}
+# Prepare the data: filter complete cases and round the AbsolutError variable
+df <- HumanA_Fixations %>% 
+  filter(complete.cases(.)) %>%
+  mutate(AbsolutErrorR = round(AbsolutError, digits = 3))
+
+# Compare AbsolutErrorR to a normal distribution
+qqp(df$AbsolutErrorR, "norm")
+
+# Compare AbsolutErrorR to a log-normal distribution
+qqp(df$AbsolutErrorR, "lnorm")
+```
+## --- Assessing the need for a multilevel model ---
+
+```{r}
+# Model with only intercept
+interceptOnly <-gls(Dwelling_Time_Agent_Gaze ~ 1, data = df, method = "ML")
+
+# Add ID as random intercept
+IDrandomInterceptOnly <- lme(Dwelling_Time_Agent_Gaze ~ 1, random = ~1|SubjectID, method = "ML", data = df)
+
+anova(interceptOnly, IDrandomInterceptOnly)
+cat("Including Id  as random effect significantly improves the fit of the model\n")
+```
+
+```{r}
+IDrandomInterceptOnly <- lmer(Dwelling_Time_Agent_Gaze ~ 1 + (1|SubjectID),  data = df)
+
+Gaze_Prediction <- update(IDrandomInterceptOnly,  .~. +  ContextEffect*Agent_Action_level + Experiment_effect)
+
+summary(Gaze_Prediction,  scientific=FALSE)
+```
+```{r}
+# Gaze_Prediction_Building
+
+IDrandomInterceptOnly <- lmer(Dwelling_Time_Building_Gaze ~ 1 + (1|SubjectID),  data = df)
+Gaze_Prediction_Building <- update(IDrandomInterceptOnly,  .~. +  ContextEffect*Agent_Action_level + Experiment_effect)
+
+summary(Gaze_Prediction_Building,  scientific=FALSE)
+```
+
+```{r}
+# Complete model with all predictors
+Complete_model <- update(StartlocationsrandomIntercept, 
+                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence + Match)
+
+# Model without the interaction term
+Complete_model_sin <- update(StartlocationsrandomIntercept, 
+                            . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + AgentPresence + Match)
+
+# Model without the 'Matchf' variable
+Complete_model_NOMATCH <- update(StartlocationsrandomIntercept, 
+                                . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence)
+
+# Display summary of the complete model
+summary(Complete_model)
+
+# Anova test for the complete model
+Anova(Complete_model)
+
+# Compare the models with and without the interaction term
+anova(Complete_model, Complete_model_sin)
+```
+
+```{r}
+Just_action<- emmeans(Gaze_Prediction, pairwise ~ Agent_Action_level)
+Interacton <-emmeans(Gaze_Prediction, pairwise ~ ContextEffect*Agent_Action_level)
+Interacton
+Interacton
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
