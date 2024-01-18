@@ -272,6 +272,10 @@ plot_model(Complete_model, type="re", order.terms = TRUE)
 
 plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red",  axis.labels =c("Location x Agent category", "Congruent Pair", "Agent Presence in Task Stimuli", "Agent category (Active vs. Passive)", "Location  (Public vs. Residential)","Dwealling time on agent", "Dwealling time on task Building"))
 tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Congruent Pair", "Location x Agent category" ))
+
+library(data.table)
+model_df <- data.table(coef(summary(Complete_model)), keep.rownames = 'term')
+write.csv(model_df, "/Volumes/TwoTeras/Resources/Complete_model.csv")
 ```
 ```{r}
 emmeans(Complete_model, pairwise ~ ContextEffect*Match)
