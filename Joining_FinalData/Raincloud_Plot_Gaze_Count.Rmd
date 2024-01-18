@@ -1,0 +1,192 @@
+---
+title: "Rancloud_Plot_Gaze_Count"
+author: "Tracy Sánchez"
+date: "Última actualización: `r format(Sys.Date(), format = '%d %B %Y')`" 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    toc_depth: 6
+    mathjax: null
+    css: doc.css # To set style to maximum in a separate file
+---
+
+```{r setup, include=FALSE}
+if (!require(remotes)) {
+    install.packages("remotes")
+}
+remotes::install_github('jorvlan/raincloudplots')
+library(raincloudplots)
+
+w_package = 3
+h_package = 6
+
+# Load required packages
+library_packages <- c(
+  "dplyr", "tidyr", "corrplot", "ggplot2"
+)
+lapply(library_packages, library, character.only = TRUE)
+```
+
+```{r}
+df_2x2 <-read.csv("/Volumes/TwoTeras/0_Experiment_1/Eye_Tracking/Pre_processed/Data_Sets/Complete_Data_AngularV_NO_Outliers.cvs")
+```
+
+
+```{r cars}
+df_2x2_spread <- data_2x2(
+  array_1 = iris$Sepal.Length[1:50],
+  array_2 = iris$Sepal.Length[51:100],
+  array_3 = iris$Sepal.Length[101:150],
+  array_4 = iris$Sepal.Length[81:130],
+  labels = (c('congruent','incongruent')),
+  jit_distance = .09,
+  jit_seed = 321,
+  spread_x_ticks = TRUE) 
+```
+```{r}
+raincloud_2x2_spread <- raincloud_2x2_repmes(
+  data = df_2x2_spread,
+  colors = (c('dodgerblue', 'darkorange', 'dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange', 'dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  spread_x_ticks = TRUE) +
+
+scale_x_continuous(breaks=c(1,2,3,4), labels=c("Pre", "Post", "Pre", "Post"), limits=c(0, 5)) +
+  xlab("Time") + 
+  ylab("Score") +
+  theme_classic()
+raincloud_2x2_spread
+```
+```{r}
+raincloud_2x2_spread <- raincloud_2x2_repmes(
+  data = df_2x2_spread,
+  colors = (c('dodgerblue', 'darkorange', 'dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange', 'dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  spread_x_ticks = TRUE) +
+
+scale_x_continuous(breaks=c(1,2,3,4), labels=c("Pre", "Post", "Pre", "Post"), limits=c(0, 5)) +
+  xlab("Time") + 
+  ylab("Score") +
+  theme_classic()
+raincloud_2x2_spread
+```
+
+
+```{r}
+df_1x1 <- data_1x1(
+  array_1 = iris$Sepal.Length[1:50],
+  array_2 = iris$Sepal.Length[51:100],
+  jit_distance = .09,
+  jit_seed = 321)
+df_1x1
+```
+
+```{r}
+library(dplyr)
+
+# Assuming your data frame is named 'your_data_frame'
+Face_Body <- df_2x2 %>%
+  group_by(SubjectID) %>%
+  summarize(
+    Body_Hits = sum(Face_Hits == "Body"),
+    Face_Hits = sum(Face_Hits == "Face")
+  )
+```
+
+```{r}
+long_format <- Face_Body %>%
+  pivot_longer(
+    cols = c(Body_Hits, Face_Hits),
+    names_to = "Type",
+    values_to = "y_axis"
+  )
+```
+```{r}
+# Assuming your long format data frame is named 'long_format'
+long_format <- long_format %>%
+  rename(id = SubjectID) %>%
+  mutate(
+    x_axis = if_else(Type == "Face_Hits", 1, 2),
+    jit = jitter(x_axis, amount = 0.1)
+  )
+    
+```
+
+```{r}
+raincloud_2 <- raincloud_1x1_repmes(
+  data = long_format,
+  colors = (c('dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  align_clouds = FALSE) +
+ 
+scale_x_continuous(breaks=c(1,2), labels=c("Face", "Body"), limits=c(0, 3)) +
+  xlab("Gaze Collider Type") + 
+  ylab("Number of Gazes") +
+  theme_classic()
+raincloud_2
+```
+```{r}
+
+# Assuming your data frame is named 'df' and the columns you want to plot are 'column1' and 'column2'
+ggplot(data = Face_Body, aes(x = Body_Hits, y = Face_Hits)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Body_Hits 1", y = "Face_Hits 2", title = "Scatter Plot of Body_Hits vs Face_Hits")
+
+# Calculate the correlation matrix
+cor_matrix <- cor(Face_Body$Body_Hits, Face_Body$Face_Hits, use = "complete.obs")  # Adjust for handling NA values if needed
+cor_matrix
+```
+
+
+```{r}
+# Calculate Pearson correlation
+correlation_result <- cor(Face_Body$Body_Hits, Face_Body$Face_Hits)
+
+# Print the result
+print(correlation_result)
+```
+
+
+```{r}
+raincloud_2 <- raincloud_1x1_repmes(
+  data = df_1x1,
+  colors = (c('dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  align_clouds = FALSE) +
+ 
+scale_x_continuous(breaks=c(1,2), labels=c("Pre", "Post"), limits=c(0, 3)) +
+  xlab("Time") + 
+  ylab("Score") +
+  theme_classic()
+raincloud_2
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

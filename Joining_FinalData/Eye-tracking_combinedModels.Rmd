@@ -18,7 +18,7 @@ knitr::opts_chunk$set(comment = NA)  # Removes all hashtags from output in HTML
 
 # Load required packages
 library_packages <- c(
-  "readr", "dlookr", "dplyr", "lme4", "car", "emmeans", "MASS", "jtools", 
+  "readr",  "dplyr", "lme4", "car", "emmeans", "MASS", "jtools", 
   "lmerTest", "gmodels", "nlme", "multcompView", "ggplot2", "sjPlot", "sjstats"
 )
 lapply(library_packages, library, character.only = TRUE)
