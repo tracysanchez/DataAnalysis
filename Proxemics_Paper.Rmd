@@ -1,0 +1,303 @@
+---
+title: "Proxemics_Paper"
+output: html_document
+date: "2024-07-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(brms)
+library(BayesFactor) # needed to calculate Bayes factors
+library(ggplot2)
+library(dplyr)
+library(car)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+Proxemics <- read.csv('/Users/tracysanchezpacheco/Downloads/df_for_stat_gender (1).csv')
+Proxemics$condition <-factor(Proxemics$condition, levels=c("Individual", "Pair", "Group"))
+
+Proxemics$Par_ID  <- as.factor(Proxemics$Par_ID)
+Proxemics$gender  <- as.factor(Proxemics$gender)
+names(Proxemics)[names(Proxemics) == "Minimal.Distance"] <- "Minimal_Distance"
+
+# View the new names
+names(Proxemics)
+
+Proxemics_no_NA <- na.omit(Proxemics)
+```
+```{r}
+output <- generalTestBF(formula = Minimal_Distance ~ condition * gender + Par_ID, 
+              data = Proxemics_no_NA, whichRandom = "Par_ID")
+output
+```
+```{r}
+# Summarize the number of unique IDs per condition
+unique_ids_per_condition <- Proxemics_no_NA %>%
+  group_by(condition) %>%
+  summarize(unique_ids = n_distinct(Par_ID))
+unique_ids_per_condition
+```
+
+
+```{r}
+options(scipen = 999)
+# Extract Bayes factors using extractBF
+bf_table <- extractBF(output, logbf = FALSE)
+
+# Extract model names and BF10 values
+model_names <- rownames(bf_table)
+bf10_values <- bf_table[, "bf"]
+
+# Calculate BF01 values
+bf01_values <- 1 / bf10_values
+
+# Combine model names, BF10, and BF01 values into a data frame
+result <- data.frame(
+  Model = model_names,
+  BF10 = bf10_values,
+  BF01 = bf01_values
+)
+
+# Print the result
+print(result)
+
+# Save the result to a CSV file
+write.csv(result, "bayes_factors.csv", row.names = FALSE)
+```
+
+```{r}
+# Perform Shapiro-Wilk test for each group
+shapiro_results <- Proxemics_no_NA %>%
+  group_by(condition, gender) %>%
+  summarize(p_value = shapiro.test(Minimal_Distance)$p.value)
+
+print(shapiro_results)
+```
+```{r}
+# Apply log transformation (add a small constant to avoid log(0) if necessary)
+Proxemics_no_NA$Minimal_Distance_log <- log(Proxemics_no_NA$Minimal_Distance + 1)
+
+# Perform Shapiro-Wilk test on transformed data
+shapiro_results_log <- Proxemics_no_NA %>%
+  group_by(condition) %>%
+  summarize(p_value = shapiro.test(Minimal_Distance_log)$p.value)
+
+print(shapiro_results_log)
+
+```
+```{r}
+
+
+
+# Note: For the Anova function, we need to specify the intra-subject design
+# This requires creating an idata frame specifying the within-subject factors
+idata <- expand.grid(condition = levels(Proxemics_no_NA$condition), 
+                     gender = levels(Proxemics_no_NA$gender))
+
+# Fit the repeated measures model using lm
+lm_mod <- lm(Minimal_Distance ~ condition * gender, data = Proxemics_no_NA)
+
+# Perform the Anova
+anova_results <- Anova(lm_mod, idata = idata, idesign = ~condition * gender)
+
+# Perform Mauchly's Test of Sphericity
+mauchly_test <- summary(anova_results, multivariate = FALSE)
+print(mauchly_test)
+
+```
+
+
+```{r}
+# Q-Q Plot
+ggplot(Proxemics_no_NA, aes(sample = Minimal_Distance)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_grid(condition ~ gender) +
+  theme_minimal() +
+  labs(title = "Q-Q Plot for Minimal Distance by Condition and Gender")
+
+# Histogram
+ggplot(Proxemics_no_NA, aes(x = Minimal_Distance)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  facet_grid(condition ~ gender) +
+  theme_minimal() +
+  labs(title = "Histogram of Minimal Distance by Condition and Gender")
+```
+
+
+```{r}
+bayes_rm <- anovaBF(Minimal_Distance ~ 1 + condition*gender + Par_ID, data = Proxemics_no_NA, whichRandom = "Par_ID")
+bayes_rm
+```
+
+
+```{r pressure, echo=FALSE}
+
+library(brms)
+
+# Define the priors
+priors <- c(set_prior("normal(3.75, 1)", class = "Intercept"),  # Prior for the intercept
+            set_prior("normal(0, 2)", class = "b"),  # Prior for other fixed effects
+            set_prior("student_t(3, 0, 2)", class = "sd"))  # Prior for random effects
+
+# Fit the Bayesian LMM using brms
+bayes_lmm <- brm(Minimal_Distance ~ condition * gender + (1 | Par_ID), 
+                 data = Proxemics_no_NA, 
+                 family = gaussian(), 
+                 prior = priors,
+                 iter = 4000, warmup = 1000, chains = 4, cores = 4)
+
+# Print the summary of the model
+summary(bayes_lmm)
+
+```
+```{r}
+# Plot marginal effects
+marginal_effects_plot <- marginal_effects(bayes_lmm)
+plot(marginal_effects_plot)
+
+```
+
+
+```{r}
+# Extract fixed effects estimates
+fixed_effects <- fixef(bayes_lmm)
+
+# Convert to a data frame
+fixed_effects_df <- as.data.frame(fixed_effects)
+fixed_effects_df$Parameter <- rownames(fixed_effects_df)
+
+# Load ggplot2
+library(ggplot2)
+
+# Plot fixed effects with error bars
+ggplot(fixed_effects_df, aes(x = Parameter, y = Estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Q2.5, ymax = Q97.5), width = 0.2) +
+  theme_minimal() +
+  labs(title = "Fixed Effects Estimates",
+       y = "Estimate",
+       x = "Parameter")
+
+```
+
+```{r}
+# Posterior predictive check
+pp_check(bayes_lmm)
+```
+```{r}
+# Fit the LMM
+lmm_model <- lmer(Minimal_Distance ~ condition * gender + (1 | Par_ID), data = Proxemics_no_NA)
+```
+
+
+
+```{r}
+# Fit the null model
+null_model <- lm(Minimal_Distance ~ 1, data = Proxemics_no_NA)
+
+# Fit the model with condition and gender
+full_model <- lm(Minimal_Distance ~ condition * gender, data = Proxemics_no_NA)
+
+```
+
+```{r}
+# Fit the null model with random effects
+null_model_mixed <- lmer(Minimal_Distance ~ 1 + (1 | Par_ID), data = Proxemics_no_NA)
+
+# Fit the full model with random effects
+full_model_mixed <- lmer(Minimal_Distance ~ condition * gender + (1 | Par_ID), data = Proxemics_no_NA)
+```
+
+```{r}
+# Extract residuals and fitted values for linear models
+residuals_null <- residuals(null_model)
+fitted_null <- fitted(null_model)
+
+residuals_full <- residuals(full_model)
+fitted_full <- fitted(full_model)
+
+# Extract residuals and fitted values for mixed models
+residuals_null_mixed <- residuals(null_model_mixed)
+fitted_null_mixed <- fitted(null_model_mixed)
+
+residuals_full_mixed <- residuals(full_model_mixed)
+fitted_full_mixed <- fitted(full_model_mixed)
+
+```
+
+```{r}
+# Q-Q plot for residuals
+qqnorm(residuals_full)
+qqline(residuals_full)
+
+# Histogram of residuals
+hist(residuals_full, main = "Histogram of Residuals - Full Model")
+
+```
+```{r}
+# Residuals vs. fitted values plot
+plot(fitted_full, residuals_full, main = "Residuals vs Fitted - Full Model")
+abline(h = 0, col = "red")
+
+```
+```{r}
+# Posterior predictive check for mixed models
+simulated_data <- simulate(full_model_mixed, nsim = 100)
+ppc_residuals <- apply(simulated_data, 2, function(x) x - fitted_full_mixed)
+ppc_residuals <- as.data.frame(ppc_residuals)
+
+# Plot simulated residuals
+par(mfrow = c(2, 2))
+for (i in 1:4) {
+  qqnorm(ppc_residuals[, i], main = paste("Simulated Residuals - Sim", i))
+  qqline(ppc_residuals[, i])
+}
+
+```
+```{r}
+# Load necessary packages
+library(lme4)
+library(bayesplot)
+
+# Fit the full model with lmer
+full_model <- lmer(Minimal_Distance ~ condition * gender + (1 | Par_ID), data = Proxemics_no_NA)
+
+# Simulate new data from the fitted model
+set.seed(123)  # For reproducibility
+simulated_data <- simulate(full_model, nsim = 100)
+
+# Extract residuals from the observed data
+observed_residuals <- residuals(full_model)
+
+# Calculate residuals for each simulated dataset
+simulated_residuals <- apply(simulated_data, 2, function(x) residuals(lmer(x ~ condition * gender + (1 | Par_ID), data = Proxemics_no_NA)))
+
+# Plot Q-Q plots for the residuals of the simulated data
+par(mfrow = c(2, 2))
+for (i in 1:4) {
+  qqnorm(simulated_residuals[, i], main = paste("Simulated Residuals - Sim", i))
+  qqline(simulated_residuals[, i])
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

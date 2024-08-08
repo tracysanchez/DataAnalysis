@@ -39,7 +39,7 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r}
-Concat_experiment2 <- read.csv("/Users/tracysanchezpacheco/Desktop/ConcatSecondExperiment.csv", sep =",")
+Concat_experiment2 <- read.csv("/Volumes/TwoTeras/3_Merged_Experiments/ConcatSecondExperiment.csv", sep =",")
 head(Concat_experiment2)
 ```
 ```{r}
@@ -61,8 +61,15 @@ Concat_experiment2 <- Concat_experiment2 %>%
     Agent_Action_levelf = factor(Agent_Action_level, levels = c(-0.5, 0.5), labels = c('Passive', 'Active'))
   )
 Match = -0.5
-
 ```
+
+```{r}
+# Prepare the data: filter complete cases and round the AbsolutError variable
+df <- Concat_experiment2 %>% 
+  filter(complete.cases(.)) %>%
+  mutate(AbsolutErrorR = round(AbsolutError, digits = 3))
+```
+
 
 ```{r warning = FALSE }
 # Filter out NA values and round Absolute Error
@@ -74,10 +81,6 @@ df_Concat_experiment2 <- Concat_experiment2 %>%
 qqp(df_Concat_experiment2$AbsolutErrorR, "norm")
 qqp(df_Concat_experiment2$AbsolutErrorR, "lnorm")
 
-# Set up sum-to-zero contrasts for factors
-contrasts(df_Concat_experiment2$ContextEffectf) <- "contr.sum"
-contrasts(df_Concat_experiment2$AgentPresencef) <- "contr.sum"
-contrasts(df_Concat_experiment2$Agent_Action_levelf) <- "contr.sum"
 
 ```
 ```{r}

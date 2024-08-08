@@ -24,8 +24,8 @@ library_packages <- c(
 lapply(library_packages, library, character.only = TRUE)
 
 # Set options for emmeans
-emm_options(lmerTest.limit = 15000)
-emm_options(pbkrtest.limit = 15000)
+#emm_options(lmerTest.limit = 15000)
+#emm_options(pbkrtest.limit = 15000)
 ```
 
 ```{r echo = FALSE, warning = FALSE}
@@ -56,16 +56,21 @@ HumanA_Fixations <- HumanA_Fixations %>%
       Agent_Category == "Active" ~ 0.5,
       TRUE ~ NaN
     ),
-    Match = ifelse(Experiment == 1 & ContextEffect == 0.5, 0.5,-0.5)
+  Match = ifelse((Experiment == 1 & ContextEffect == 0.5), 0.5, -0.5),
+    Experiment = case_when(
+      Experiment == 1 ~ -0.5,
+      Experiment == 2 ~ 0.5,
+      TRUE ~ NaN
+    )
   ) %>%
   # Convert numeric variables to factors
   mutate(
     ContextEffectf = factor(ContextEffect, levels = c(-0.5, 0.5), labels = c('Residential', 'Public')),
     AgentPresencef = factor(AgentPresence, levels = c(-0.5, 0.5), labels = c('Omitted', 'Displayed')),
     Agent_Action_levelf = factor(Agent_Action_level, levels = c(-0.5, 0.5), labels = c('Passive', 'Active')),
-    Matchf = factor(Match, levels = c(-0.5, 0.5), labels = c('Not Congruent', 'Congruent'))
+    Matchf = factor(Match, levels = c(-0.5, 0.5, 0), labels = c('Not Congruent', 'Congruent', 'Neutral')),
+    Experimentf = factor(Experiment, levels = c(-0.5, 0.5), labels = c('Experiment 1', 'Experiment 2'))
   )
-
 
 ```
 
@@ -106,14 +111,7 @@ Congruence_check_ordered <- Congruence_check %>%
   arrange(desc(Performance_Mean))
 ```
 
-```{r}
-# Set up sum-to-zero contrasts for selected factors
-factors_to_contrast <- c("ContextEffectf", "AgentPresencef", "Agent_Action_levelf")
 
-for (factor_name in factors_to_contrast) {
-  contrasts(HumanA_Fixations[[factor_name]]) <- "contr.sum"
-}
-```
 
 ```{r }
 # Subset main variables from dataset
@@ -209,6 +207,23 @@ qqp(df$AbsolutErrorR, "norm")
 # Compare AbsolutErrorR to a log-normal distribution
 qqp(df$AbsolutErrorR, "lnorm")
 ```
+```{r}
+target_ids <- c("5743", "6406", "5189", "9297", "7081", "5766", "1031", "4598", "4847", "8629", "9627", "5972", "7935", "4580", "1843", "5851", "5161", "1268", "1574", "4875", "7823", "1754", "2258", "2693", "3310", "4176", "4796", "4917", "5238", "5741", "6642", "7093", "7412", "7842", "8007", "8469", "8673", "8695", "9472", "9502", "9601", "365", "4597", "9586", "365")
+filtered_data <- df[df$SubjectID %in% target_ids,]
+
+unique_ids_df <- unique(df$SubjectID)
+unique_ids_filtered_df <- unique(filtered_data$SubjectID)
+
+# Finding IDs in df but not in filtered_df
+diff_ids = setdiff(unique_ids_df, unique_ids_filtered_df)
+print(diff_ids)
+cat("Number of unique IDs in df not in filtered_df:", length(diff_ids), "\n")
+cat("Number of unique IDs in df:", length(unique_ids_df), "\n")
+unique_ids_df
+```
+
+
+
 ## --- Assessing the need for a multilevel model ---
 
 ```{r}
@@ -225,6 +240,18 @@ cat("Including Id and starting position as random effects significantly improves
 ```
 ## --- Absolute Error Models ---
 
+
+```{r}
+# Just behavioral
+
+TwofactorInteraction_No_Eye <-update(StartlocationsrandomIntercept, .~. + ContextEffectf*Agent_Action_levelf + AgentPresencef + Matchf)
+# Model summary
+summary(TwofactorInteraction_No_Eye)
+# Anova test for the model
+Anova(TwofactorInteraction_No_Eye)
+```
+
+
 ```{r}
 # Starting with eye-tracking as predictor of performance
 
@@ -240,22 +267,29 @@ plot_model(TwofactorInteraction_Agent, show.values = TRUE, value.offset = .3, co
 tab_model(TwofactorInteraction_Agent)
 ```
 ```{r}
+# No Eye-tracking
+No_Eye_tracking <- update(StartlocationsrandomIntercept, .~. +   Matchf + ContextEffectf*Agent_Action_levelf )
+# Model summary
+summary(No_Eye_tracking)
+# Anova test for the model
+Anova(No_Eye_tracking)
+```
+
+
+```{r}
 
 # Linear regression model with various predictors
-linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffectf*Agent_Action_levelf + AgentPresencef + Matchf, data=df)
+linear_model <- lm(AbsolutError ~ Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + Experimentf + ContextEffectf*Agent_Action_levelf*Matchf, data=df)
 
 
 # Complete model with all predictors
 Complete_model <- update(StartlocationsrandomIntercept, 
-                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence + Match)
+                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + Matchf + ContextEffectf*Agent_Action_levelf)
 
-# Model without the interaction term
-Complete_model_sin <- update(StartlocationsrandomIntercept, 
-                            . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + AgentPresence + Match)
 
 # Model without the 'Matchf' variable
 Complete_model_NOMATCH <- update(StartlocationsrandomIntercept, 
-                                . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence)
+                                . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + Experimentf + ContextEffectf*Agent_Action_levelf)
 
 # Display summary of the complete model
 summary(Complete_model)
@@ -264,23 +298,120 @@ summary(Complete_model)
 Anova(Complete_model)
 
 # Compare the models with and without the interaction term
-anova(Complete_model, Complete_model_sin)
+anova(Complete_model, Complete_model_NOMATCH)
 
 ```
 ```{r}
 plot_model(Complete_model, type="re", order.terms = TRUE)
 
-plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red",  axis.labels =c("Location x Agent category", "Congruent Pair", "Agent Presence in Task Stimuli", "Agent category (Active vs. Passive)", "Location  (Public vs. Residential)","Dwealling time on agent", "Dwealling time on task Building"))
-tab_model(Complete_model, pred.labels=c("Intercept", "Dwealling time on task Building",  "Dwealling time on agent","Location  (Public vs. Residential)","Agent category (Active vs. Passive)","Agent Presence in Task Stimuli", "Congruent Pair", "Location x Agent category" ))
+plot_model(Complete_model, show.values = TRUE, value.offset = .3, colors="bw",  vline.color = "red")
+
 
 library(data.table)
 model_df <- data.table(coef(summary(Complete_model)), keep.rownames = 'term')
 write.csv(model_df, "/Volumes/TwoTeras/Resources/Complete_model.csv")
 ```
 ```{r}
-emmeans(Complete_model, pairwise ~ ContextEffect*Match)
+# Register parallel backend
+library(doParallel)
+cl <- makeCluster(detectCores() - 1)  # Leave one core free for other tasks
+registerDoParallel(cl)
 ```
+```{r}
+# Assuming you have the model fitted as 'model'
+model <- lmer(AbsolutError ~ (1 | SubjectID) + (1 | PointingTaskStartingLocations) +  
+                Experimentf + ContextEffectf + Agent_Action_levelf + Matchf + 
+                ContextEffectf:Agent_Action_levelf + ContextEffectf:Matchf +  
+                Agent_Action_levelf:Matchf + ContextEffectf:Agent_Action_levelf:Matchf, 
+              data = df)
+```
+```{r}
+# Calculate EMMeans for the significant effects and interactions
+emm_context <- emmeans(No_Eye_tracking, ~ ContextEffectf)
+emm_agent <- emmeans(No_Eye_tracking, ~ Agent_Action_levelf)
+emm_interaction <- emmeans(No_Eye_tracking, ~ ContextEffectf * Agent_Action_levelf)
+emm_congruency <- emmeans(No_Eye_tracking, ~ Matchf)
 
+# Print the EMMeans results
+print(emm_context)
+print(emm_agent)
+print(emm_interaction)
+print(emm_congruency)
+
+# Stop parallel backend
+stopCluster(cl)
+registerDoSEQ()
+```
+```{r}
+
+# Load necessary libraries
+library(dplyr)
+# Set a specific seed for reproducibility
+set.seed(12345)
+
+# Filter the data for Experiment 1
+data_exp1 <- df %>% filter(Experiment == -0.5)
+
+# Calculate the observed difference in means for Experiment 1
+observed_diff_exp1 <- data_exp1 %>%
+  group_by(ContextEffectf) %>%
+  summarise(mean_error = mean(AbsolutError, na.rm = TRUE)) %>%
+  summarise(diff = abs(diff(mean_error))) %>%
+  pull(diff)
+
+# Permutation test for Experiment 1
+num_samples <- 10000
+perm_diffs_exp1 <- replicate(num_samples, {
+  permuted_data <- data_exp1 %>%
+    mutate(ContextEffectf = sample(ContextEffectf))
+  
+  permuted_diff <- permuted_data %>%
+    group_by(ContextEffectf) %>%
+    summarise(mean_error = mean(AbsolutError, na.rm = TRUE)) %>%
+    summarise(diff = abs(diff(mean_error))) %>%
+    pull(diff)
+  
+  return(permuted_diff)
+})
+
+# Calculate p-value for Experiment 1
+p_value_exp1 <- mean(perm_diffs_exp1 >= observed_diff_exp1)
+
+# Report the results for Experiment 1
+cat("Experiment 1 - Observed difference in means:", observed_diff_exp1, "\n")
+cat("Experiment 1 - Permutation test p-value:", p_value_exp1, "\n")
+
+# Filter the data for Experiment 2
+data_exp2 <- df %>% filter(Experiment == 0.5)
+
+# Calculate the observed difference in means for Experiment 2
+observed_diff_exp2 <- data_exp2 %>%
+  group_by(ContextEffectf) %>%
+  summarise(mean_error = mean(AbsolutError, na.rm = TRUE)) %>%
+  summarise(diff = abs(diff(mean_error))) %>%
+  pull(diff)
+
+# Permutation test for Experiment 2
+perm_diffs_exp2 <- replicate(num_samples, {
+  permuted_data <- data_exp2 %>%
+    mutate(ContextEffectf = sample(ContextEffectf))
+  
+  permuted_diff <- permuted_data %>%
+    group_by(ContextEffectf) %>%
+    summarise(mean_error = mean(AbsolutError, na.rm = TRUE)) %>%
+    summarise(diff = abs(diff(mean_error))) %>%
+    pull(diff)
+  
+  return(permuted_diff)
+})
+
+# Calculate p-value for Experiment 2
+p_value_exp2 <- mean(perm_diffs_exp2 >= observed_diff_exp2)
+
+# Report the results for Experiment 2
+cat("Experiment 2 - Observed difference in means:", observed_diff_exp2, "\n")
+cat("Experiment 2 - Permutation test p-value:", p_value_exp2, "\n")
+```
 
 
 

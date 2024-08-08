@@ -78,6 +78,11 @@ df = HumanA[complete.cases(HumanA),]
 ggplot(df,aes(x=AbsolutError_Building,group=Agent_Action_levelf,fill=Agent_Action_levelf))+
   geom_histogram(position="identity",alpha=0.5,binwidth=10)+  facet_grid(cols = vars(ContextEffectf))+theme_bw()
 ```
+```{r}
+target_ids <- c("5743", "6406", "5189", "9297", "7081", "5766", "1031", "4598", "4847", "8629", "9627", "5972", "7935", "4580", "1843", "5851", "5161", "1268", "1574", "4875", "7823", "1754", "2258", "2693", "3310", "4176", "4796", "4917", "5238", "5741", "6642", "7093", "7412", "7842", "8007", "8469", "8673", "8695", "9472", "9502", "9601", "365", "4597", "9586")
+filtered_data <- df[df$ID %in% target_ids,]
+```
+
 
 ```{r }
 library(dplyr)
@@ -314,6 +319,11 @@ contrasts(df$Agent_Action_levelf) <- "contr.sum"
 
 ```
 
+```{r}
+target_ids <- c("5743", "6406", "5189", "9297", "7081", "5766", "1031", "4598", "4847", "8629", "9627", "5972", "7935", "4580", "1843", "5851", "5161", "1268", "1574", "4875", "7823", "1754", "2258", "2693", "3310", "4176", "4796", "4917", "5238", "5741", "6642", "7093", "7412", "7842", "8007", "8469", "8673", "8695", "9472", "9502", "9601", "365", "4597", "9586")
+filtered_data <- df[df$ID %in% target_ids,]
+```
+
 
 # Linear mixed models
 
@@ -325,7 +335,7 @@ Here we choose a crossed random model effect because all pointing locations repe
 iinterceptOnly <-gls(AbsolutError_Building ~ 1, data = df, 
                     method = "ML")
 IDrandomInterceptOnly <-lmer(AbsolutError_Building~ 1 + (1|ID), data = df)
-StartlocationsrandomIntercept <-lmer(AbsolutError_Building ~ 1 + (1|ID) + (1|PointingTaskStartingLocations_Building), data = df)
+StartlocationsrandomIntercept <-lmer(AbsolutError_Building ~ 1 + (1|ID) + (1|PointingTaskStartingLocations_Building), data = filtered_data)
 ```
 Including Id and starting position as random effects significantly improves the fit of the model 
 
