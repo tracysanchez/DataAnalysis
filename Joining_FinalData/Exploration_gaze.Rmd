@@ -114,6 +114,77 @@ target_ids <- c("5743", "6406", "5189", "9297", "7081", "5766", "1031", "4598", 
 filtered_data <- df[df$SubjectID %in% target_ids,]
 ```
 
+```{r}
+unique_ids <- unique(filtered_data$SubjectID) 
+length(unique_ids)
+```
+
+```{r}
+# Calculate the overall means and standard deviations for agent and building gazes
+overall_stats <- filtered_data %>%
+  summarise(
+    mean_Dwelling_Time_Agent_Gaze = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Agent_Gaze = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    mean_Dwelling_Time_Building_Gaze = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Building_Gaze = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE)
+  )
+
+# Print the summary statistics
+print(overall_stats)
+
+
+# Mean and standard deviation across ContextEffect
+context_stats <- filtered_data %>%
+  group_by(ContextEffect) %>%
+  summarise(
+    mean_Dwelling_Time_Agent_Gaze = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Agent_Gaze = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    mean_Dwelling_Time_Building_Gaze = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Building_Gaze = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE)
+  )
+
+print(context_stats)
+
+# Mean and standard deviation across Agent_Action_level
+action_level_stats <- filtered_data %>%
+  group_by(Agent_Action_level) %>%
+  summarise(
+    mean_Dwelling_Time_Agent_Gaze = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Agent_Gaze = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    mean_Dwelling_Time_Building_Gaze = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Building_Gaze = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE)
+  )
+
+print(action_level_stats)
+
+# Mean and standard deviation across Matchf
+matchf_stats <- filtered_data %>%
+  group_by(Matchf) %>%
+  summarise(
+    mean_Dwelling_Time_Agent_Gaze = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Agent_Gaze = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    mean_Dwelling_Time_Building_Gaze = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Building_Gaze = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE)
+  )
+
+print(matchf_stats)
+
+
+# Assuming filtered_data is your dataframe
+summary_stats <- filtered_data %>%
+  group_by(ContextEffect, Agent_Action_level, Matchf) %>%
+  summarise(
+    mean_Dwelling_Time_Agent_Gaze = mean(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Agent_Gaze = sd(Dwelling_Time_Agent_Gaze, na.rm = TRUE),
+    mean_Dwelling_Time_Building_Gaze = mean(Dwelling_Time_Building_Gaze, na.rm = TRUE),
+    sd_Dwelling_Time_Building_Gaze = sd(Dwelling_Time_Building_Gaze, na.rm = TRUE)
+  )
+
+# Print the summary statistics
+print(summary_stats)
+```
+
+
 
 ```{r}
 # Model with only intercept
@@ -133,7 +204,7 @@ IDrandomInterceptOnly <- lmer(Dwelling_Time_Agent_Gaze ~ 1 + (1|SubjectID),  dat
 
 Gaze_Prediction <- update(IDrandomInterceptOnly,  .~. +  ContextEffect*Agent_Action_level + Matchf)
 
-summary(Gaze_Prediction,  scientific=FALSE)
+summary(Gaze_Prediction)
 ```
 ```{r}
 # Gaze_Prediction_Building

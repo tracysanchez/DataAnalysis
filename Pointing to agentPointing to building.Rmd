@@ -25,8 +25,8 @@ library_packages <- c(
 lapply(library_packages, library, character.only = TRUE)
 
 # Set options for emmeans
-emm_options(lmerTest.limit = 10000)
-emm_options(pbkrtest.limit = 10000)
+#emm_options(lmerTest.limit = 10000)
+#emm_options(pbkrtest.limit = 10000)
 
 # Not scientific notation
 options(scipen=999)
@@ -84,10 +84,36 @@ qqp(df_Concat_experiment2$AbsolutErrorR, "lnorm")
 
 ```
 ```{r}
+target_ids <- c("365", "1754", "2258", "2693", "3310", "4176", "4597", "4796", "4917", "5238", 
+  "5741", "6642", "7093", "7412", "7842", "8007", "8469", "8673", "8695", "9472", 
+  "9502", "9586", "9601", "1031", "1268", "1574", "1843", "4580", "4598", "4847", 
+  "4875", "5161", "5189", "5743", "5766", "5851", "5972", "6406", "7081", "7823", 
+  "7935", "8629", "9297", "9627", "1005", "1008", "1010", "1011", "1013", "1017", 
+  "1018", "1019", "1021", "1022", "1023", "1054", "1055", "1056", "1057", "1058", 
+  "1068", "1069", "1072", "1073", "1074", "1075", "1077", "1079", "1080")
+
+filtered_data <- df_Concat_experiment2[df_Concat_experiment2$SubjectID %in% target_ids,]
+
+unique_ids_df <- unique(df_Concat_experiment2$SubjectID)
+unique_ids_filtered_df <- unique(filtered_data$SubjectID)
+
+# Finding IDs in df but not in filtered_df
+diff_ids = setdiff(unique_ids_df, unique_ids_filtered_df)
+print(diff_ids)
+cat("Number of unique IDs in df not in filtered_df:", length(diff_ids), "\n")
+cat("Number of unique IDs in df:", length(unique_ids_df), "\n")
+unique_ids_df
+```
+
+
+
+```{r}
+
+filtered_data
 # Assessing the need for a multilevel model
 interceptOnly <- gls(AbsolutErrorR ~ 1, data = df_Concat_experiment2, method = "ML")
-IDrandomIntercept <- lmer(AbsolutErrorR ~ 1 + (1 | SubjectID), data = df_Concat_experiment2)
-PointingLocations <- lmer(AbsolutErrorR ~ 1 + (1 | StartPointID) + (1 | SubjectID), data = df_Concat_experiment2)
+IDrandomIntercept <- lmer(AbsolutErrorR ~ 1 + (1 | SubjectID), data = filtered_data)
+PointingLocations <- lmer(AbsolutErrorR ~ 1 + (1 | StartPointID) + (1 | SubjectID), data = filtered_data)
 
 # Compare models
 anova(IDrandomIntercept, PointingLocations)
@@ -107,7 +133,7 @@ emmeans(contrastM, pairwise ~ Task)
 ```{r}
 # Filter out rows with any missing values
 library(dplyr)
-Agent <- Concat_experiment2 %>% filter(Task == -0.5)
+Agent <- filtered_data %>% filter(Task == -0.5)
 ```
 
 ```{r}
@@ -122,6 +148,7 @@ qqp(df$AbsolutErrorR, "norm")
 # Compare AbsolutErrorR to a log-normal distribution
 qqp(df$AbsolutErrorR, "lnorm")
 ```
+
 ```{r}
 # Model with only intercept
 interceptOnly <- gls(AbsolutError ~ 1, data = df, method = "ML")
@@ -133,16 +160,21 @@ IDrandomInterceptOnly <- lmer(AbsolutError ~ 1 + (1|SubjectID), data = df)
 StartlocationsrandomIntercept <- lmer(AbsolutError ~ 1 + (1|SubjectID) + (1|PointingTaskStartingLocations), data = df)
 anova( IDrandomInterceptOnly, StartlocationsrandomIntercept)
 cat("Including Id and starting position as random effects significantly improves the fit of the model\n")
+unique(df$Task)
 ```
 
 ```{r}
 # Complete model with all predictors
-Complete_model <- update(StartlocationsrandomIntercept, 
-                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level + AgentPresence)
 
-# Model without the interaction term
-Complete_model_sin <- update(StartlocationsrandomIntercept, 
-                            . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + AgentPresence)
+
+Behahvi_model <- update(StartlocationsrandomIntercept, 
+                            . ~ . + ContextEffect*Agent_Action_level)
+
+
+Complete_model <- update(StartlocationsrandomIntercept, 
+                        . ~ . + Dwelling_Time_Building_Gaze + Dwelling_Time_Agent_Gaze + ContextEffect*Agent_Action_level)
+
+
 
 # Model without the 'Matchf' variable
 Complete_model_NOMATCH <- update(StartlocationsrandomIntercept, 
@@ -153,17 +185,19 @@ Complete_model_NOMATCH <- update(StartlocationsrandomIntercept,
 Partial <- update(StartlocationsrandomIntercept, 
                                 . ~ . + ContextEffect*Agent_Action_level)
 
+
+summary(Behahvi_model)
+
 # Display summary of the complete model
 summary(Complete_model)
 
 # Anova test for the complete model
 Anova(Complete_model)
 
-# Compare the models with and without the interaction term
-anova(Complete_model, Complete_model_sin)
 ```
 ```{r}
-emmeans(Partial, pairwise ~ ContextEffect*Agent_Action_level)
+emmeans(Behahvi_model, pairwise ~ ContextEffect)
+emmeans(Behahvi_model, pairwise ~ Agent_Action_level)
 ```
 
 
